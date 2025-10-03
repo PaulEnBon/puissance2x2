@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Puissance 4</title>
+</head>
+<body>
+    <h1>Tour du joueur : {{.Player}}</h1>
+
+    <table border="1">
+        {{range .Board}}
+            <tr>
+                {{range .}}
+                    <td>{{.}}</td>
+                {{end}}
+            </tr>
+        {{end}}
+    </table>
+</body>
+</html>
