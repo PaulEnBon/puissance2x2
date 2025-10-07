@@ -1,0 +1,187 @@
+/*
+	templates/font.css
+	------------------
+	Feuille de style légère et propre centrée sur la typographie.
+	Contient : variables CSS (typo + couleurs), règles globales, tailles réactives,
+	utilitaires accessibles (screen-reader, text-truncate...), et quelques styles
+	pour les éléments courants (headings, paragraphs, links, code).
+
+	Usage : inclure ce fichier dans vos templates HTML pour avoir une base
+	typographique cohérente et facile à personnaliser.
+*/
+
+:root {
+	/* Polices */
+	--font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Liberation Sans', sans-serif;
+	--font-serif: Georgia, 'Times New Roman', Times, serif;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', 'Courier New', monospace;
+
+	/* Couleurs neutres (peu saturées pour la typographie) */
+	--text-color: #111827; /* gris très foncé */
+	--muted-color: #6b7280; /* gris moyen */
+	--link-color: #1d4ed8; /* bleu accessible */
+	--link-hover: #1e40af;
+
+	/* Mesures */
+	--base-font-size: 16px;
+	--base-line-height: 1.5;
+	--scale-ratio: 1.25; /* ratio pour hiérarchie des titres */
+
+	/* Espacements (modulaires) */
+	--space-xxs: 0.25rem;
+	--space-xs: 0.5rem;
+	--space-sm: 0.75rem;
+	--space-md: 1rem;
+	--space-lg: 1.5rem;
+	--space-xl: 2rem;
+}
+
+/* --- Règles globales --- */
+html {
+	font-size: var(--base-font-size);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Corps de document */
+body {
+	margin: 0;
+	font-family: var(--font-sans);
+	color: var(--text-color);
+	line-height: var(--base-line-height);
+	background: #fff;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Typographie de base */
+p {
+	margin: 0 0 var(--space-md) 0;
+}
+
+a {
+	color: var(--link-color);
+	text-decoration: underline;
+}
+
+a:hover,
+a:focus {
+	color: var(--link-hover);
+	outline: none;
+}
+
+/* Hiérarchie des titres basée sur une échelle modulaire */
+h1, h2, h3, h4, h5, h6 {
+	margin: 0 0 var(--space-sm) 0;
+	font-weight: 600;
+	line-height: 1.2;
+	color: var(--text-color);
+}
+
+h1 { font-size: calc(var(--base-font-size) * var(--scale-ratio) * var(--scale-ratio)); }
+h2 { font-size: calc(var(--base-font-size) * var(--scale-ratio)); }
+h3 { font-size: calc(var(--base-font-size) * 1.125); }
+h4 { font-size: 1rem; }
+h5 { font-size: 0.875rem; }
+h6 { font-size: 0.75rem; }
+
+.lead {
+	font-size: 1.125rem;
+	color: var(--muted-color);
+	margin-bottom: var(--space-md);
+}
+
+/* Petits textes */
+.muted { color: var(--muted-color); }
+.small { font-size: 0.875rem; }
+
+/* Monospace / bloc de code */
+code, kbd, samp, pre {
+	font-family: var(--font-mono);
+	font-size: 0.875em;
+}
+
+pre {
+	background: #f3f4f6;
+	padding: var(--space-sm);
+	overflow: auto;
+	border-radius: 6px;
+}
+
+/* Table basique propre */
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+th, td {
+	text-align: left;
+	padding: 0.5rem 0.75rem;
+	border-bottom: 1px solid #e5e7eb;
+}
+
+/* Utilitaires d'accessibilité et petites helpers */
+.sr-only {
+	position: absolute !important;
+	width: 1px; height: 1px;
+	padding: 0; margin: -1px; overflow: hidden;
+	clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.visually-centered {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Form controls - style sobre et accessible */
+input, textarea, select, button {
+	font-family: inherit;
+	font-size: 1rem;
+}
+
+input, textarea, select {
+	border: 1px solid #d1d5db;
+	border-radius: 6px;
+	padding: 0.5rem 0.75rem;
+	background: #fff;
+	color: var(--text-color);
+}
+
+input:focus, textarea:focus, select:focus {
+	outline: 3px solid rgba(29,78,216,0.12);
+	border-color: var(--link-color);
+}
+
+button {
+	padding: 0.5rem 0.75rem;
+	border: none;
+	background: var(--link-color);
+	color: white;
+	border-radius: 6px;
+	cursor: pointer;
+}
+
+button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+/* Responsive small tweaks */
+@media (max-width: 600px) {
+	:root { --base-font-size: 15px; }
+	h1 { font-size: calc(var(--base-font-size) * var(--scale-ratio) * 1.25); }
+}
+
+/* Préférences d'animation réduites pour l'accessibilité */
+@media (prefers-reduced-motion: reduce) {
+	* { transition: none !important; animation-duration: 0s !important; }
+}
+
+/* EOF */
+

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="utf-8">
@@ -7,21 +7,21 @@
     <link rel="stylesheet" href="/static/font.css">
     <style>
         body { padding: 1rem; font-family: system-ui, sans-serif; }
-        /* board layout */
+         
         .board { border-collapse: collapse; margin: 1rem 0; table-layout: fixed; }
-    /* reduced cell size for denser board */
+     
     .board td { width: 36px; height: 36px; border: 2px solid #0f172a; background: #60a5fa; padding: 0; position: relative; text-align: center; vertical-align: middle; }
         .board th { padding: 0; }
-    /* token circle */
+     
     .cell { width: 26px; height: 26px; border-radius: 50%; margin: 4px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
         .cell.R { background: #ef4444; box-shadow: none; border-color: rgba(0,0,0,0.06); }
         .cell.Y { background: #f59e0b; box-shadow: none; border-color: rgba(0,0,0,0.06); }
-    /* column buttons - bigger arrow, centered and high contrast */
+     
     .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
     .col-button:disabled { opacity: 0.35; cursor: not-allowed; background: rgba(255,255,255,0.7); }
         .info { display:flex; gap:1rem; align-items:center }
-    /* reset button distinctive */
+     
     #reset { background: #1d4ed8; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; }
     #reset:hover { background: #1e40af; }
     #reset:active { transform: translateY(1px); }
@@ -31,7 +31,7 @@
             .cell { width: 22px; height: 22px; }
             .col-button { width: 34px; height: 34px; font-size: 16px; }
         }
-        /* animation for dropping token */
+         
         .floating-token {
             position: absolute;
             width: 26px; height: 26px; border-radius: 50%;
@@ -45,7 +45,7 @@
 <body>
     <h1>Puissance 4</h1>
     <div class="info">
-        <div id="status">{{if .Finished}}{{if .Winner}}Gagnant: {{.Winner}}{{else}}Match nul{{end}}{{else}}Au tour de: {{.Next}}{{end}}</div>
+        <div id="status">Au tour de: R</div>
         <form method="post" action="/reset" style="display:inline">
             <button id="reset" type="submit">Nouvelle partie</button>
         </form>
@@ -55,26 +55,40 @@
         <table class="board" aria-label="Plateau de jeu">
             <thead>
                 <tr>
-                    {{range $col := seq 0 6}}
+                    
                     <th>
-                        <button class="col-button" name="column" value="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}}>▼</button>
+                        <button class="col-button" name="column" value="0" type="submit" >▼</button>
                     </th>
-                    {{end}}
+                    
+                    <th>
+                        <button class="col-button" name="column" value="1" type="submit" >▼</button>
+                    </th>
+                    
+                    <th>
+                        <button class="col-button" name="column" value="2" type="submit" >▼</button>
+                    </th>
+                    
+                    <th>
+                        <button class="col-button" name="column" value="3" type="submit" >▼</button>
+                    </th>
+                    
+                    <th>
+                        <button class="col-button" name="column" value="4" type="submit" >▼</button>
+                    </th>
+                    
+                    <th>
+                        <button class="col-button" name="column" value="5" type="submit" >▼</button>
+                    </th>
+                    
+                    <th>
+                        <button class="col-button" name="column" value="6" type="submit" >▼</button>
+                    </th>
+                    
                 </tr>
             </thead>
             <tbody>
-                {{range $r := seq 0 5}}
+                
                 <tr>
-                    {{range $c := seq 0 6}}
+                    
                     <td>
-                        {{ $cell := index $.Board $r $c }}
-                        <span class="cell {{if $cell}}{{$cell}}{{end}}"></span>
-                    </td>
-                    {{end}}
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-    </form>
-</body>
-</html>
+                        

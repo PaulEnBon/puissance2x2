@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -6,10 +9,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"power4"
+	power4 "power4/power4"
 	"sync"
 )
 
+// GameState représente l'état courant d'une partie de Puissance 4.
 type GameState struct {
 	Board    [6][7]string `json:"board"`
 	Next     string       `json:"next"`
@@ -20,7 +24,8 @@ type GameState struct {
 var (
 	state = GameState{Next: "R"}
 	mu    sync.Mutex
-	tmpl  = template.Must(template.New("index.html").Funcs(template.FuncMap{
+	// NOTE: on enregistre une fonction utilitaire seq pour générer des séquences d'entiers dans le template.
+	tmpl = template.Must(template.New("index.html").Funcs(template.FuncMap{
 		"seq": func(a, b int) []int {
 			s := make([]int, 0, b-a+1)
 			for i := a; i <= b; i++ {
@@ -31,6 +36,7 @@ var (
 	}).ParseFiles("templates/index.html"))
 )
 
+// resetBoard réinitialise le plateau et l'état de partie.
 func resetBoard() {
 	for r := 0; r < 6; r++ {
 		for c := 0; c < 7; c++ {
@@ -42,42 +48,41 @@ func resetBoard() {
 	state.Finished = false
 }
 
+// indexHandler rend la page principale.
+// IMPORTANT (bug initial corrigé): Dans le template, à l'intérieur des {{range}}, le point (.) change de valeur.
+// Pour accéder au plateau on doit ancrer le contexte racine avec $. Exemple utilisé:  {{ $cell := index $.Board $r $c }}
+// Sans cela certaines cases n'étaient pas évaluées correctement et pouvaient ne pas s'afficher.
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 	if err := tmpl.Execute(w, state); err != nil {
-		// Log the template execution error and return a clear HTTP 500 to help debugging
 		log.Printf("template execute error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 }
 
-// formPlayHandler handles form submissions from the HTML board (POST form)
+// formPlayHandler gère le dépôt d'un jeton dans une colonne via le formulaire.
 func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-
 	colStr := r.FormValue("column")
 	if colStr == "" {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-
 	var col int
 	if _, err := fmt.Sscanf(colStr, "%d", &col); err != nil {
 		http.Error(w, "Invalid column", http.StatusBadRequest)
 		return
 	}
 
-	// Reuse play logic with locking
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -85,7 +90,6 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-
 	if col < 0 || col > 6 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
@@ -114,13 +118,10 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 			state.Next = "R"
 		}
 	}
-
-	// no client-side animation state needed
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// formResetHandler accepts POST reset from the HTML page
+// formResetHandler remet la partie à zéro.
 func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -132,23 +133,14 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// stateHandler removed (JSON API not used)
-
-// JSON API handlers removed; use form-based handlers only.
-
-// winner logic moved to package power4 (verif.go)
-
-// resetHandler removed (use formResetHandler)
-
 func main() {
 	resetBoard()
 
 	http.HandleFunc("/", indexHandler)
-	// form-based endpoints
 	http.HandleFunc("/play", formPlayHandler)
 	http.HandleFunc("/reset", formResetHandler)
 
-	// Serve static templates folder (JS/CSS)
+	// Fichiers statiques (CSS)
 	fs := http.FileServer(http.Dir("templates"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 
@@ -156,6 +148,6 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Serveur lancé sur http://localhost:%s\n", port)
+	log.Printf("Serveur lancé sur http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }

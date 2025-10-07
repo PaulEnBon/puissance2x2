@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"power4"
+	power4 "power4/power4"
 	"sync"
 )
 
@@ -46,51 +46,31 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 	if err := tmpl.Execute(w, state); err != nil {
-		// Log the template execution error and return a clear HTTP 500 to help debugging
 		log.Printf("template execute error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 }
 
-// formPlayHandler handles form submissions from the HTML board (POST form)
 func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
-
-	colStr := r.FormValue("column")
-	if colStr == "" {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
-	}
-
 	var col int
-	if _, err := fmt.Sscanf(colStr, "%d", &col); err != nil {
+	if _, err := fmt.Sscanf(r.FormValue("column"), "%d", &col); err != nil {
 		http.Error(w, "Invalid column", http.StatusBadRequest)
 		return
 	}
-
-	// Reuse play logic with locking
 	mu.Lock()
 	defer mu.Unlock()
-
-	if state.Finished {
+	if state.Finished || col < 0 || col > 6 {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-
-	if col < 0 || col > 6 {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
 	placed := false
 	for rr := 5; rr >= 0; rr-- {
 		if state.Board[rr][col] == "" {
@@ -103,7 +83,6 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-
 	if winner := power4.Winner(state.Board); winner != "" {
 		state.Winner = winner
 		state.Finished = true
@@ -114,13 +93,9 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 			state.Next = "R"
 		}
 	}
-
-	// no client-side animation state needed
-
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// formResetHandler accepts POST reset from the HTML page
 func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -132,30 +107,17 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// stateHandler removed (JSON API not used)
-
-// JSON API handlers removed; use form-based handlers only.
-
-// winner logic moved to package power4 (verif.go)
-
-// resetHandler removed (use formResetHandler)
-
 func main() {
 	resetBoard()
-
 	http.HandleFunc("/", indexHandler)
-	// form-based endpoints
 	http.HandleFunc("/play", formPlayHandler)
 	http.HandleFunc("/reset", formResetHandler)
-
-	// Serve static templates folder (JS/CSS)
 	fs := http.FileServer(http.Dir("templates"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Serveur lancé sur http://localhost:%s\n", port)
+	log.Printf("Serveur lancé sur http://localhost:%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
