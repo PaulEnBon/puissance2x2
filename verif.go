@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package power4
 
 func Winner(board [6][7]string) string {
