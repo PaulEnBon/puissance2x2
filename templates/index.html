@@ -46,9 +46,12 @@
     <h1>Puissance 4</h1>
     <div class="info">
         <div id="status">{{if .Finished}}{{if .Winner}}Gagnant: {{.Winner}}{{else}}Match nul{{end}}{{else}}Au tour de: {{.Next}}{{end}}</div>
-        <form method="post" action="/reset" style="display:inline">
-            <button id="reset" type="submit">Nouvelle partie</button>
-        </form>
+        <div style="display:inline-flex;align-items:center;gap:.5rem">
+            <form method="post" action="/reset" style="display:inline">
+                <button id="reset" type="submit">Nouvelle partie</button>
+            </form>
+            <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
+        </div>
     </div>
 
     <form method="post" action="/play">
@@ -76,5 +79,8 @@
             </tbody>
         </table>
     </form>
+    <!-- Fullscreen decorative canvas for textures/animations -->
+    <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
+    <script src="/static/app.js" defer></script>
 </body>
 </html>
