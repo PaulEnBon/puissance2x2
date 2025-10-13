@@ -240,86 +240,74 @@
     return el;
   }
 
-  // Animate dropping token from button to target cell, then submit the form
+  // Animate dropping token from button to target cell (visual only, doesn't block submit)
   function wireDropAnimations(){
     const buttons = document.querySelectorAll('.col-button');
     if(!buttons || buttons.length===0) return;
     buttons.forEach(btn => {
       btn.addEventListener('click', function(ev){
         try{
-          // If it's a normal submit, let the animation run and then submit
+          // Visual-only animation: don't prevent default, let form submit naturally
           console.debug('[bg] col-button click, value=', btn.value);
-          ev.preventDefault();
-          const form = btn.form || document.querySelector('form[action="/play"]');
+          
           const col = btn.value;
+          const colIndex = Number(col);
+          if(Number.isNaN(colIndex) || colIndex < 0) return;
 
-        // determine target cell: find first empty cell from bottom in that column
-  const table = document.querySelector('.board');
-  if(!table){ console.debug('[bg] board table not found, fallback submit'); if(form) form.submit(); return; }
-  const tb = table.tBodies && table.tBodies[0];
-  if(!tb){ if(form) form.submit(); return; }
-  const rows = Array.from(tb.rows || []);
-        let targetCell = null;
-  const colIndex = Number(col);
-  if(Number.isNaN(colIndex) || colIndex < 0){ console.debug('[bg] invalid colIndex', col); if(form) form.submit(); return; }
-        for(let i = rows.length-1; i>=0; i--){
-          const td = rows[i].cells[colIndex];
-          const span = td.querySelector('.cell');
-          if(span && !span.classList.contains('R') && !span.classList.contains('Y')){
-            targetCell = td;
-            break;
+          // determine target cell: find first empty cell from bottom in that column
+          const table = document.querySelector('.board');
+          if(!table) return;
+          const tb = table.tBodies && table.tBodies[0];
+          if(!tb) return;
+          const rows = Array.from(tb.rows || []);
+          let targetCell = null;
+          
+          for(let i = rows.length-1; i>=0; i--){
+            const td = rows[i].cells[colIndex];
+            if(!td) continue;
+            const span = td.querySelector('.cell');
+            if(span && !span.classList.contains('R') && !span.classList.contains('Y')){
+              targetCell = td;
+              break;
+            }
           }
-        }
-        console.debug('[bg] targetCell=', !!targetCell, 'colIndex=', colIndex);
-        // create token at button position
-        const color = (document.getElementById('status') && document.getElementById('status').textContent.indexOf('Au tour de: R')!==-1) ? 'R' : 'Y';
-  const token = createFloatingToken(color);
-  document.body.appendChild(token);
+          
+          if(!targetCell) return; // column full, no animation
+          
+          // create token at button position
+          const color = (document.getElementById('status') && document.getElementById('status').textContent.indexOf('Au tour de: R')!==-1) ? 'R' : 'Y';
+          const token = createFloatingToken(color);
+          document.body.appendChild(token);
 
-        const btnRect = btn.getBoundingClientRect();
-        token.style.left = (btnRect.left + btnRect.width/2 - 13) + 'px';
-        token.style.top = (btnRect.top + btnRect.height/2 - 13) + 'px';
+          const btnRect = btn.getBoundingClientRect();
+          token.style.left = (btnRect.left + btnRect.width/2 - 13) + 'px';
+          token.style.top = (btnRect.top + btnRect.height/2 - 13) + 'px';
 
-        // compute destination
-        if(!targetCell){
-          // full column -> just submit immediately
-          console.debug('[bg] targetCell missing - full column');
-          try{ token.remove(); } catch(e){}
-          if(form) form.submit();
-          return;
-        }
-        const cellRect = targetCell.getBoundingClientRect();
-        const destX = cellRect.left + cellRect.width/2 - 13;
-        const destY = cellRect.top + cellRect.height/2 - 13;
+          const cellRect = targetCell.getBoundingClientRect();
+          const destX = cellRect.left + cellRect.width/2 - 13;
+          const destY = cellRect.top + cellRect.height/2 - 13;
 
-  console.debug('[bg] animate start dest=', destX, destY);
-  // animate using requestAnimationFrame
-        const start = performance.now();
-        const duration = 500; // ms
-        const sx = parseFloat(token.style.left) || 0;
-        const sy = parseFloat(token.style.top) || 0;
-        function animate(now){
-          const t = Math.min(1, (now - start)/duration);
-          // easeOutCubic
-          const ease = 1 - Math.pow(1 - t, 3);
-          token.style.left = (sx + (destX - sx) * ease) + 'px';
-          token.style.top = (sy + (destY - sy) * ease) + 'px';
-          token.style.transform = 'scale(' + (1 - 0.25 * ease) + ')';
-          if(t < 1){
-            requestAnimationFrame(animate);
-          } else {
-            // brief bounce effect
-            token.style.transition = 'transform 140ms';
-            token.style.transform = 'translateY(2px) scale(0.96)';
-            setTimeout(()=>{ try{ token.remove(); console.debug('[bg] animate end'); } catch(e){} if(form) form.submit(); }, 140);
+          // animate using requestAnimationFrame (visual only, page will reload)
+          const start = performance.now();
+          const duration = 400; // slightly faster since page reloads
+          const sx = parseFloat(token.style.left) || 0;
+          const sy = parseFloat(token.style.top) || 0;
+          
+          function animate(now){
+            const t = Math.min(1, (now - start)/duration);
+            const ease = 1 - Math.pow(1 - t, 3); // easeOutCubic
+            token.style.left = (sx + (destX - sx) * ease) + 'px';
+            token.style.top = (sy + (destY - sy) * ease) + 'px';
+            token.style.transform = 'scale(' + (1 - 0.2 * ease) + ')';
+            if(t < 1){
+              requestAnimationFrame(animate);
+            } else {
+              try{ token.remove(); } catch(e){}
+            }
           }
-        }
-        requestAnimationFrame(animate);
+          requestAnimationFrame(animate);
         } catch(err){
-          // On any unexpected error, fallback to submitting the form to keep UX intact
-          try{ if(ev && ev.preventDefault) ev.preventDefault(); } catch(e){}
-          const fallbackForm = btn.form || document.querySelector('form[action="/play"]');
-          if(fallbackForm) fallbackForm.submit();
+          console.error('[bg] animation error:', err);
         }
       });
     });
