@@ -6,18 +6,43 @@
     <title>Puissance 4</title>
     <link rel="stylesheet" href="/static/font.css">
     <style>
-        body { padding: 1rem; font-family: system-ui, sans-serif; }
+        /* Background image */
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            font-family: system-ui, sans-serif;
+            background: url('/images/principal1.gif') no-repeat center center fixed;
+            background-size: cover;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Game container centered */
+        .game-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            max-width: 650px;
+        }
+        h1 {
+            margin: 0 0 1rem 0;
+            text-align: center;
+            color: #0f172a;
+        }
         /* board layout */
-        .board { border-collapse: collapse; margin: 1rem 0; table-layout: fixed; }
-    /* reduced cell size for denser board */
-    .board td { width: 36px; height: 36px; border: 2px solid #0f172a; background: #60a5fa; padding: 0; position: relative; text-align: center; vertical-align: middle; }
+        .board { border-collapse: collapse; margin: 1rem auto; table-layout: fixed; }
+    /* increased cell size for better visibility */
+    .board td { width: 60px; height: 60px; border: 3px solid #0f172a; background: #60a5fa; padding: 0; position: relative; text-align: center; vertical-align: middle; }
         .board th { padding: 0; }
-    /* token circle */
-    .cell { width: 26px; height: 26px; border-radius: 50%; margin: 4px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
+    /* token circle - larger */
+    .cell { width: 48px; height: 48px; border-radius: 50%; margin: 5px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
         .cell.R { background: #ef4444; box-shadow: none; border-color: rgba(0,0,0,0.06); }
         .cell.Y { background: #f59e0b; box-shadow: none; border-color: rgba(0,0,0,0.06); }
-    /* column buttons - bigger arrow, centered and high contrast */
-    .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 18px; line-height: 1; color: #0f172a; border-radius: 6px; }
+    /* column buttons - bigger */
+    .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 60px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
     .col-button:disabled { opacity: 0.35; cursor: not-allowed; background: rgba(255,255,255,0.7); }
         .info { display:flex; gap:1rem; align-items:center }
@@ -27,14 +52,14 @@
     #reset:active { transform: translateY(1px); }
     #reset:focus { outline: 3px solid rgba(29,78,216,0.18); }
         @media (max-width: 480px) {
-            .board td { width: 34px; height: 34px; }
-            .cell { width: 22px; height: 22px; }
-            .col-button { width: 34px; height: 34px; font-size: 16px; }
+            .board td { width: 50px; height: 50px; }
+            .cell { width: 40px; height: 40px; }
+            .col-button { width: 50px; height: 42px; font-size: 20px; }
         }
-        /* animation for dropping token */
+        /* animation for dropping token - adjusted for larger size */
         .floating-token {
             position: absolute;
-            width: 26px; height: 26px; border-radius: 50%;
+            width: 48px; height: 48px; border-radius: 50%;
             pointer-events: none; z-index: 20; transform: translateY(0);
             transition: transform 450ms cubic-bezier(.22,.9,.33,1);
         }
@@ -43,9 +68,16 @@
     </style>
 </head>
 <body>
-    <h1>Puissance 4</h1>
-    <div class="info">
-        <div id="status">{{if .Finished}}{{if .Winner}}Gagnant: {{.Winner}}{{else}}Match nul{{end}}{{else}}Au tour de: {{.Next}}{{end}}</div>
+    <div class="game-container">
+        <h1>Puissance 4</h1>
+        <div class="info">
+        <div id="status">
+            {{if .Finished}}
+                {{if .Winner}}Gagnant: {{.Winner}} | Prochain défi: {{.WinLength}} pions alignés sur {{.Rows}}x{{.Cols}}!{{else}}Match nul{{end}}
+            {{else}}
+                Au tour de: {{.Next}} | Objectif: {{.WinLength}} pions alignés
+            {{end}}
+        </div>
         <div style="display:inline-flex;align-items:center;gap:.5rem">
             <form method="post" action="/reset" style="display:inline">
                 <button id="reset" type="submit">Nouvelle partie</button>
@@ -54,11 +86,12 @@
         </div>
     </div>
 
-    <form method="post" action="/play">
+    <form method="post" action="/play" id="playForm">
+        <input type="hidden" name="column" id="hiddenColumn" value="">
         <table class="board" aria-label="Plateau de jeu">
             <thead>
                 <tr>
-                    {{range $col := seq 0 6}}
+                    {{range $col := seq 0 (sub .Cols 1)}}
                     <th>
                         <button class="col-button" name="column" value="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}}>▼</button>
                     </th>
@@ -66,9 +99,9 @@
                 </tr>
             </thead>
             <tbody>
-                {{range $r := seq 0 5}}
+                {{range $r := seq 0 (sub $.Rows 1)}}
                 <tr>
-                    {{range $c := seq 0 6}}
+                    {{range $c := seq 0 (sub $.Cols 1)}}
                     <td>
                         {{ $cell := index $.Board $r $c }}
                         <span class="cell {{if $cell}}{{$cell}}{{end}}"></span>
@@ -79,8 +112,49 @@
             </tbody>
         </table>
     </form>
+    </div>
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
+    <script>
+        // Prevent multiple form submissions and ensure column is always sent
+        (function(){
+            const form = document.getElementById('playForm');
+            const hiddenColumn = document.getElementById('hiddenColumn');
+            if(!form || !hiddenColumn) return;
+            
+            let isSubmitting = false;
+            let lastClickedColumn = null;
+            
+            // Capture which column button was clicked
+            form.addEventListener('click', function(e){
+                if(e.target && e.target.classList.contains('col-button')){
+                    lastClickedColumn = e.target.value;
+                    hiddenColumn.value = lastClickedColumn;
+                    console.log('[form] column button clicked:', lastClickedColumn);
+                }
+            }, true);
+            
+            // Prevent submission without column or duplicate submissions
+            form.addEventListener('submit', function(e){
+                // Check if we have a column value
+                const columnValue = hiddenColumn.value;
+                if(!columnValue || columnValue === ''){
+                    e.preventDefault();
+                    console.log('[form] prevented submission without column value');
+                    return false;
+                }
+                
+                if(isSubmitting){
+                    e.preventDefault();
+                    console.log('[form] prevented duplicate submission');
+                    return false;
+                }
+                
+                isSubmitting = true;
+                console.log('[form] submitting with column:', columnValue);
+            });
+        })();
+    </script>
     <script src="/static/app.js" defer></script>
 </body>
 </html>

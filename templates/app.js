@@ -230,10 +230,10 @@
   function createFloatingToken(color){
     const el = document.createElement('div');
     el.className = 'floating-token ' + color;
-    // style fallback if CSS missing
+    // style fallback if CSS missing - adjusted for larger size
     el.style.position = 'absolute';
-    el.style.width = '26px';
-    el.style.height = '26px';
+    el.style.width = '48px';
+    el.style.height = '48px';
     el.style.borderRadius = '50%';
     el.style.pointerEvents = 'none';
     el.style.zIndex = '1000';
@@ -280,12 +280,12 @@
           document.body.appendChild(token);
 
           const btnRect = btn.getBoundingClientRect();
-          token.style.left = (btnRect.left + btnRect.width/2 - 13) + 'px';
-          token.style.top = (btnRect.top + btnRect.height/2 - 13) + 'px';
+          token.style.left = (btnRect.left + btnRect.width/2 - 24) + 'px';
+          token.style.top = (btnRect.top + btnRect.height/2 - 24) + 'px';
 
           const cellRect = targetCell.getBoundingClientRect();
-          const destX = cellRect.left + cellRect.width/2 - 13;
-          const destY = cellRect.top + cellRect.height/2 - 13;
+          const destX = cellRect.left + cellRect.width/2 - 24;
+          const destY = cellRect.top + cellRect.height/2 - 24;
 
           // animate using requestAnimationFrame (visual only, page will reload)
           const start = performance.now();

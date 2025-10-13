@@ -1,27 +1,63 @@
 package power4
 
-func Winner(board [6][7]string) string {
-	for r := 0; r < 6; r++ {
-		for c := 0; c < 7; c++ {
+func Winner(board [][]string, rows, cols, winLength int) string {
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
 			p := board[r][c]
 			if p == "" {
 				continue
 			}
 			// horizontal
-			if c+3 < 7 && board[r][c+1] == p && board[r][c+2] == p && board[r][c+3] == p {
-				return p
+			if c+winLength-1 < cols {
+				win := true
+				for i := 1; i < winLength; i++ {
+					if board[r][c+i] != p {
+						win = false
+						break
+					}
+				}
+				if win {
+					return p
+				}
 			}
 			// vertical
-			if r+3 < 6 && board[r+1][c] == p && board[r+2][c] == p && board[r+3][c] == p {
-				return p
+			if r+winLength-1 < rows {
+				win := true
+				for i := 1; i < winLength; i++ {
+					if board[r+i][c] != p {
+						win = false
+						break
+					}
+				}
+				if win {
+					return p
+				}
 			}
 			// diagonal droite
-			if r+3 < 6 && c+3 < 7 && board[r+1][c+1] == p && board[r+2][c+2] == p && board[r+3][c+3] == p {
-				return p
+			if r+winLength-1 < rows && c+winLength-1 < cols {
+				win := true
+				for i := 1; i < winLength; i++ {
+					if board[r+i][c+i] != p {
+						win = false
+						break
+					}
+				}
+				if win {
+					return p
+				}
 			}
 			// diagonal gauche
-			if r+3 < 6 && c-3 >= 0 && board[r+1][c-1] == p && board[r+2][c-2] == p && board[r+3][c-3] == p {
-				return p
+			if r+winLength-1 < rows && c-winLength+1 >= 0 {
+				win := true
+				for i := 1; i < winLength; i++ {
+					if board[r+i][c-i] != p {
+						win = false
+						break
+					}
+				}
+				if win {
+					return p
+				}
 			}
 		}
 	}
