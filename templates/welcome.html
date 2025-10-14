@@ -52,10 +52,10 @@
     <div id="pressKeyMessage">Appuyez sur une touche pour commencer</div>
     
     <script>
-        // Redirect to menu on any key press
+        // Redirect to players page on any key press
         function startGame(e) {
             e.preventDefault();
-            window.location.href = '/menu';
+            window.location.href = '/players';
         }
         
         document.addEventListener('keydown', startGame, { once: true });

@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	state = game.GameState{Next: "R", Mode: "exponentiel", Rows: 6, Cols: 7, WinLength: 4}
-	mu    sync.Mutex
+	state       = game.GameState{Next: "R", Mode: "exponentiel", Rows: 6, Cols: 7, WinLength: 4}
+	mu          sync.Mutex
+	playerNames = []string{"Joueur 1", "Joueur 2"} // Noms des joueurs
 )
 
 var (
@@ -29,6 +30,7 @@ var (
 	}).ParseFiles("templates/index.html"))
 	menuTmpl    = template.Must(template.New("menu.html").ParseFiles("templates/menu.html"))
 	welcomeTmpl = template.Must(template.ParseFiles("templates/welcome.html"))
+	playersTmpl = template.Must(template.ParseFiles("templates/players.html"))
 )
 
 func resetBoard() {
@@ -72,6 +74,46 @@ func welcomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// playersHandler affiche le formulaire pour saisir les noms des joueurs
+func playersHandler(w http.ResponseWriter, r *http.Request) {
+	if err := playersTmpl.Execute(w, nil); err != nil {
+		log.Printf("players template error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// setPlayersHandler sauvegarde les noms des joueurs
+func setPlayersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Récupérer les noms des joueurs
+	player1 := r.FormValue("player1")
+	player2 := r.FormValue("player2")
+
+	if player1 != "" {
+		playerNames[0] = player1
+	}
+	if player2 != "" {
+		playerNames[1] = player2
+	}
+
+	log.Printf("Noms des joueurs sauvegardés: %v", playerNames)
+
+	// Rediriger vers le menu de sélection de mode
+	http.Redirect(w, r, "/menu", http.StatusSeeOther)
+}
+
 // menuHandler shows the base menu to choose a mode
 func menuHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
@@ -86,7 +128,19 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
-	if err := indexTmpl.Execute(w, state); err != nil {
+
+	// Créer une structure pour passer à la fois le state et les noms des joueurs
+	data := struct {
+		game.GameState
+		Player1Name string
+		Player2Name string
+	}{
+		GameState:   state,
+		Player1Name: playerNames[0],
+		Player2Name: playerNames[1],
+	}
+
+	if err := indexTmpl.Execute(w, data); err != nil {
 		log.Printf("template execute error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
@@ -149,6 +203,26 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
+// nextLevelHandler passe au niveau suivant en mode exponentiel (augmente la difficulté)
+func nextLevelHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+
+	// En mode exponentiel, on augmente le défi après une victoire
+	if state.Mode == "exponentiel" && state.Winner != "" {
+		state.WinLength++
+		log.Printf("Mode exponentiel: niveau suivant = %d alignés", state.WinLength)
+	}
+	// En mode classique, on ne change rien
+
+	resetBoard()
+	http.Redirect(w, r, "/game", http.StatusSeeOther)
+}
+
 func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -157,12 +231,12 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// En mode exponentiel, on réinitialise complètement à 6×7 et puissance 4
+	// Reset complet : retour à la taille et difficulté initiale
 	if state.Mode == "exponentiel" {
 		state.WinLength = 4
 		state.Rows = 6
 		state.Cols = 7
-		log.Printf("Mode exponentiel: réinitialisé à Puissance 4 (6×7)")
+		log.Printf("Mode exponentiel: réinitialisation complète à Puissance 4 (6×7)")
 	}
 	// En mode classique, on ne change rien (toujours 6×7, 4 alignés)
 
@@ -225,9 +299,12 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	resetBoard()
 	http.HandleFunc("/", welcomeHandler)
+	http.HandleFunc("/players", playersHandler)
+	http.HandleFunc("/set-players", setPlayersHandler)
 	http.HandleFunc("/menu", menuHandler)
 	http.HandleFunc("/game", indexHandler)
 	http.HandleFunc("/play", formPlayHandler)
+	http.HandleFunc("/next-level", nextLevelHandler)
 	http.HandleFunc("/reset", formResetHandler)
 	http.HandleFunc("/restart-mode", restartModeHandler)
 	http.HandleFunc("/set-mode", setModeHandler)

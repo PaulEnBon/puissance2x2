@@ -183,19 +183,33 @@
         <div class="info">
         <div id="status">
             {{if .Finished}}
-                {{if .Winner}}🎉 Gagnant: {{.Winner}}! | Prochain défi: {{add .WinLength 1}} pions alignés!{{else}}Match nul{{end}}
+                {{if .Winner}}
+                    {{if eq .Winner "R"}}
+                        🎉 Gagnant: {{.Player1Name}} 🔴! | Prochain défi: {{add .WinLength 1}} pions alignés!
+                    {{else}}
+                        🎉 Gagnant: {{.Player2Name}} 🟡! | Prochain défi: {{add .WinLength 1}} pions alignés!
+                    {{end}}
+                {{else}}
+                    Match nul
+                {{end}}
             {{else}}
-                Au tour de: {{.Next}} | Objectif: {{.WinLength}} pions alignés
+                {{if eq .Next "R"}}
+                    Au tour de: {{.Player1Name}} 🔴 | Objectif: {{.WinLength}} pions alignés
+                {{else}}
+                    Au tour de: {{.Player2Name}} 🟡 | Objectif: {{.WinLength}} pions alignés
+                {{end}}
             {{end}}
         </div>
         <div style="display:inline-flex;align-items:center;gap:.5rem">
             <div id="compteDisplay" style="background:#16a34a;color:white;padding:0.5rem 0.75rem;border-radius:6px;font-weight:bold;">
                 Clics: <span id="compteValue">0</span>
             </div>
-            <form method="post" action="/reset" style="display:inline">
-                <button id="reset" type="submit">Nouvelle partie</button>
+            <form method="post" action="/next-level" style="display:inline">
+                <button id="nextLevel" type="submit">Nouvelle partie</button>
             </form>
-            <button id="resetScores" type="button" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser les scores">🔄 Reset</button>
+            <form method="post" action="/reset" style="display:inline">
+                <button id="reset" type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
+            </form>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
         </div>
     </div>
@@ -232,11 +246,11 @@
     <div class="scoreboard">
         <h2>🏆 Scores</h2>
         <div class="score-item player-r">
-            <span class="player-name">🔴 Joueur 1</span>
+            <span class="player-name">🔴 {{.Player1Name}}</span>
             <span class="player-score" id="scoreR">0</span>
         </div>
         <div class="score-item player-y">
-            <span class="player-name">🟡 Joueur 2</span>
+            <span class="player-name">🟡 {{.Player2Name}}</span>
             <span class="player-score" id="scoreY">0</span>
         </div>
     </div>
@@ -333,6 +347,18 @@
                     document.getElementById('scoreY').textContent = '0';
                     console.log('[Reset] Scores réinitialisés à 0');
                     alert('Scores réinitialisés !');
+                }
+            });
+        }
+        
+        // Bouton "Reset Complet" - réinitialise la grille ET les scores en mode exponentiel
+        var resetForm = document.querySelector('form[action="/reset"]');
+        if(resetForm) {
+            resetForm.addEventListener('submit', function(e) {
+                if(gameMode === 'exponentiel') {
+                    localStorage.setItem('scoreR', '0');
+                    localStorage.setItem('scoreY', '0');
+                    console.log('[Reset Complet] Scores réinitialisés à 0');
                 }
             });
         }

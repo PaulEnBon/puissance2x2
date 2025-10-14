@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joueurs - Puissance 4</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2rem;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="number"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .player-inputs {
+            margin-top: 20px;
+        }
+        
+        .player-input-group {
+            margin-bottom: 15px;
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .player-input-group label {
+            font-size: 1rem;
+            font-weight: 500;
+            color: #667eea;
+        }
+        
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .error-message {
+            color: #dc2626;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            display: none;
+        }
+        
+        .info-text {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 5px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Configuration des Joueurs</h1>
+        
+        <form id="playersForm" method="post" action="/set-players">
+            <div class="form-group">
+                <label for="playerCount">Nombre de joueurs</label>
+                <input type="number" id="playerCount" name="playerCount" min="2" max="2" value="2" required>
+                <p class="info-text">Actuellement limité à 2 joueurs</p>
+                <p class="error-message" id="countError">Veuillez entrer un nombre entre 2 et 2</p>
+            </div>
+            
+            <div class="player-inputs" id="playerInputs">
+                <div class="player-input-group">
+                    <label for="player1">Nom du Joueur 1 (Rouge 🔴)</label>
+                    <input type="text" id="player1" name="player1" placeholder="Entrez le nom du joueur 1" required maxlength="20">
+                </div>
+                <div class="player-input-group">
+                    <label for="player2">Nom du Joueur 2 (Jaune 🟡)</label>
+                    <input type="text" id="player2" name="player2" placeholder="Entrez le nom du joueur 2" required maxlength="20">
+                </div>
+            </div>
+            
+            <button type="submit">Continuer →</button>
+        </form>
+    </div>
+    
+    <script>
+        const playerCountInput = document.getElementById('playerCount');
+        const playerInputsDiv = document.getElementById('playerInputs');
+        const form = document.getElementById('playersForm');
+        
+        // Générer les champs de saisie de noms en fonction du nombre de joueurs
+        playerCountInput.addEventListener('input', function() {
+            const count = parseInt(this.value) || 2;
+            
+            // Limiter entre 2 et 2 pour l'instant
+            if (count < 2 || count > 2) {
+                document.getElementById('countError').style.display = 'block';
+                return;
+            } else {
+                document.getElementById('countError').style.display = 'none';
+            }
+            
+            // Générer les champs
+            playerInputsDiv.innerHTML = '';
+            
+            const colors = ['Rouge 🔴', 'Jaune 🟡'];
+            
+            for (let i = 1; i <= count; i++) {
+                const div = document.createElement('div');
+                div.className = 'player-input-group';
+                div.innerHTML = `
+                    <label for="player${i}">Nom du Joueur ${i} (${colors[i-1]})</label>
+                    <input type="text" id="player${i}" name="player${i}" placeholder="Entrez le nom du joueur ${i}" required maxlength="20">
+                `;
+                playerInputsDiv.appendChild(div);
+            }
+        });
+        
+        // Validation du formulaire
+        form.addEventListener('submit', function(e) {
+            const count = parseInt(playerCountInput.value);
+            
+            if (count < 2 || count > 2) {
+                e.preventDefault();
+                alert('Veuillez entrer un nombre de joueurs valide (2)');
+                return;
+            }
+            
+            // Vérifier que tous les noms sont remplis
+            for (let i = 1; i <= count; i++) {
+                const input = document.getElementById(`player${i}`);
+                if (!input || !input.value.trim()) {
+                    e.preventDefault();
+                    alert(`Veuillez entrer le nom du joueur ${i}`);
+                    return;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
