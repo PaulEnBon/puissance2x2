@@ -76,6 +76,47 @@
         }
         .floating-token.R { background: #ef4444; }
         .floating-token.Y { background: #f59e0b; }
+        
+        /* Ghost animation effect */
+        .ghost-anim {
+            position: fixed;
+            pointer-events: none;
+            z-index: 999999;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            animation: ghostBounce 3s ease-in-out;
+            opacity: 0;
+            filter: drop-shadow(0 0 50px rgba(255, 255, 255, 1));
+        }
+        
+        @keyframes ghostBounce {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.1);
+            }
+            15% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.5);
+            }
+            30% {
+                transform: translate(-50%, -50%) scale(1.3);
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.4);
+            }
+            70% {
+                transform: translate(-50%, -50%) scale(1.35);
+            }
+            85% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.3);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+        }
     </style>
 </head>
 <body>
@@ -90,6 +131,9 @@
             {{end}}
         </div>
         <div style="display:inline-flex;align-items:center;gap:.5rem">
+            <div id="compteDisplay" style="background:#16a34a;color:white;padding:0.5rem 0.75rem;border-radius:6px;font-weight:bold;">
+                Clics: <span id="compteValue">0</span>
+            </div>
             <form method="post" action="/reset" style="display:inline">
                 <button id="reset" type="submit">Nouvelle partie</button>
             </form>
@@ -138,6 +182,37 @@
         var compte = parseInt(localStorage.getItem('compteClics')) || 0;
         console.log('[Init] Compte de clics chargé:', compte);
         
+        // Afficher le compte dans l'interface
+        var compteValueElement = document.getElementById('compteValue');
+        if(compteValueElement) {
+            compteValueElement.textContent = compte;
+        }
+        
+        // Fonction pour créer l'effet ghost
+        function createGhostEffect(buttonElement) {
+            // Utiliser l'animation ghost
+            var ghostImage = '/images/anim_ghost.png';
+            
+            // Créer l'élément ghost
+            var ghost = document.createElement('img');
+            ghost.src = ghostImage;
+            ghost.className = 'ghost-anim';
+            ghost.style.width = '600px';
+            ghost.style.height = '600px';
+            
+            console.log('[Ghost] Animation fantôme ÉNORME créée au centre de l\'écran');
+            
+            // Ajouter au body
+            document.body.appendChild(ghost);
+            
+            // Retirer après l'animation (3 secondes)
+            setTimeout(function() {
+                if(ghost.parentNode) {
+                    ghost.parentNode.removeChild(ghost);
+                }
+            }, 3000);
+        }
+        
         // Ensure column value is set when button is clicked
         (function(){
             const form = document.getElementById('playForm');
@@ -150,6 +225,10 @@
                 button.addEventListener('click', function(e){
                     const columnValue = this.getAttribute('data-column');
                     hiddenColumn.value = columnValue;
+                    
+                    // Créer l'effet ghost à la position du bouton
+                    createGhostEffect(this);
+                    
                     console.log('[button click] set column to:', columnValue, '| Clics actuels:', compte);
                 });
             });
@@ -187,7 +266,7 @@
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script>
         // Récupérer le compte de clics pour définir le nombre de particules
-        var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 10; // Minimum 10 particules
+        var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 0;
         console.log('[Particles] Nombre de particules:', nombreParticules);
         
         // Configuration de base pour particles.js
@@ -226,12 +305,12 @@
                     }
                 },
                 "size": {
-                    "value": 80,
+                    "value": 150,
                     "random": true,
                     "anim": {
                         "enable": false,
                         "speed": 40,
-                        "size_min": 50,
+                        "size_min": 10,
                         "sync": false
                     }
                 },
@@ -257,64 +336,30 @@
                 "detect_on": "canvas",
                 "events": {
                     "onhover": {
-                        "enable": true,
-                        "mode": "bubble"
+                        "enable": false
                     },
                     "onclick": {
-                        "enable": true,
-                        "mode": "push"
+                        "enable": false
                     },
                     "resize": true
-                },
-                "modes": {
-                    "bubble": {
-                        "distance": 150,
-                        "size": 100,
-                        "duration": 2,
-                        "opacity": 1,
-                        "speed": 3
-                    },
-                    "push": {
-                        "particles_nb": 2
-                    }
                 }
             },
             "retina_detect": true
         };
 
-        // Initialiser particles.js
-        particlesJS('particles-js', particlesConfig);
-        
-        // Choisir aléatoirement UNE SEULE image pour TOUTES les particules
+        // Choisir aléatoirement l'image AVANT d'initialiser particles.js
         var images = ['/images/tete-erwann.png', '/images/tete-gabriel.png'];
         var randomChoice = Math.floor(Math.random() * 2);
-        var chosenImage = new Image();
+        var chosenImageSrc = images[randomChoice];
         
-        console.log('Image choisie pour cette session:', randomChoice === 0 ? 'Erwann' : 'Gabriel');
+        // Configurer l'image dans la config
+        particlesConfig.particles.shape.image.src = chosenImageSrc;
         
-        // Attendre que l'image soit complètement chargée
-        chosenImage.onload = function() {
-            // Après que l'image est chargée, l'appliquer aux particules
-            setTimeout(function() {
-                if (window.pJSDom && window.pJSDom[0] && window.pJSDom[0].pJS.particles.array) {
-                    var particles = window.pJSDom[0].pJS.particles.array;
-                    
-                    particles.forEach(function(particle) {
-                        // Toutes les particules utilisent la même image choisie
-                        particle.img = {
-                            obj: chosenImage,
-                            src: chosenImage.src,
-                            loaded: true
-                        };
-                    });
-                    
-                    console.log('Toutes les', particles.length, 'particules affichent:', randomChoice === 0 ? 'Erwann' : 'Gabriel');
-                }
-            }, 300);
-        };
+        console.log('[Particles] Image choisie:', randomChoice === 0 ? 'Erwann' : 'Gabriel');
+        console.log('[Particles] Nombre de particules:', particlesConfig.particles.number.value);
         
-        // Charger l'image (déclenche onload)
-        chosenImage.src = images[randomChoice];
+        // Initialiser particles.js avec la bonne image
+        particlesJS('particles-js', particlesConfig);
     </script>
 </body>
 </html>

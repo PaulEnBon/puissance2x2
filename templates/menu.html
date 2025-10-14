@@ -53,5 +53,17 @@
       <a class="button secondary" href="/game">Continuer la partie</a>
     </div>
   </div>
+  
+  <script>
+    // Réinitialiser le compte de clics quand on choisit un mode de jeu
+    const modeForm = document.querySelector('form[action="/set-mode"]');
+    if(modeForm) {
+      modeForm.addEventListener('submit', function(e) {
+        // Réinitialiser le compteur de clics à 0
+        localStorage.setItem('compteClics', '0');
+        console.log('[Menu] Compte de clics réinitialisé à 0');
+      });
+    }
+  </script>
 </body>
 </html>
