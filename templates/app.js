@@ -248,9 +248,9 @@
       btn.addEventListener('click', function(ev){
         try{
           // Visual-only animation: don't prevent default, let form submit naturally
-          console.debug('[bg] col-button click, value=', btn.value);
+          const col = btn.getAttribute('data-column');
+          console.debug('[bg] col-button click, data-column=', col);
           
-          const col = btn.value;
           const colIndex = Number(col);
           if(Number.isNaN(colIndex) || colIndex < 0) return;
 

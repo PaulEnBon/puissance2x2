@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 package main
 
 import (
@@ -9,32 +6,17 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"power4"
+	"power4/game"
 	"sync"
 )
 
-// GameState représente l'état courant d'une partie de Puissance 4.
-type GameState struct {
-	Board     [][]string `json:"board"`
-	Rows      int        `json:"rows"`
-	Cols      int        `json:"cols"`
-	WinLength int        `json:"winLength"`
-	Next      string     `json:"next"`
-	Winner    string     `json:"winner"`
-	Finished  bool       `json:"finished"`
-}
+var (
+	state = game.GameState{Next: "R", Mode: "exponentiel", Rows: 6, Cols: 7, WinLength: 4}
+	mu    sync.Mutex
+)
 
 var (
-	state = GameState{
-		Rows:      6,
-		Cols:      7,
-		WinLength: 4,
-		Next:      "R",
-	}
-	mu sync.Mutex
-	// Templates
-	welcomeTmpl = template.Must(template.ParseFiles("templates/welcome.html"))
-	gameTmpl    = template.Must(template.New("index.html").Funcs(template.FuncMap{
+	indexTmpl = template.Must(template.New("index.html").Funcs(template.FuncMap{
 		"seq": func(a, b int) []int {
 			s := make([]int, 0, b-a+1)
 			for i := a; i <= b; i++ {
@@ -42,79 +24,85 @@ var (
 			}
 			return s
 		},
-		"sub": func(a, b int) int {
-			return a - b
-		},
+		"sub": func(a, b int) int { return a - b },
+		"add": func(a, b int) int { return a + b },
 	}).ParseFiles("templates/index.html"))
+	menuTmpl    = template.Must(template.New("menu.html").ParseFiles("templates/menu.html"))
+	welcomeTmpl = template.Must(template.ParseFiles("templates/welcome.html"))
 )
 
-// resetBoard réinitialise le plateau et l'état de partie.
 func resetBoard() {
-	// Créer un nouveau plateau avec les dimensions actuelles
-	state.Board = make([][]string, state.Rows)
-	for r := 0; r < state.Rows; r++ {
-		state.Board[r] = make([]string, state.Cols)
+	// Agrandir le plateau si nécessaire pour le mode exponentiel
+	if state.Mode == "exponentiel" {
+		// Pour le mode exponentiel, on augmente le plateau progressivement
+		// Chaque victoire ajoute +1 en lignes et colonnes
+		state.Rows = 6 + (state.WinLength - 4)
+		state.Cols = 7 + (state.WinLength - 4)
+
+		// Limiter à 15x15 max (taille du tableau)
+		if state.Rows > 15 {
+			state.Rows = 15
+		}
+		if state.Cols > 15 {
+			state.Cols = 15
+		}
+	}
+
+	// Nettoyer tout le plateau selon les dimensions actuelles
+	for r := 0; r < state.Rows && r < 15; r++ {
+		for c := 0; c < state.Cols && c < 15; c++ {
+			state.Board[r][c] = ""
+		}
 	}
 	state.Next = "R"
 	state.Winner = ""
 	state.Finished = false
 }
 
-// expandBoard augmente la taille du plateau de 1 case et le nombre de pions à aligner de 1.
-func expandBoard() {
-	state.Rows++
-	state.Cols++
-	state.WinLength++
-	resetBoard()
-}
-
-// welcomeHandler affiche l'écran d'accueil
+// welcomeHandler affiche l'écran d'accueil avec l'image
 func welcomeHandler(w http.ResponseWriter, r *http.Request) {
 	if err := welcomeTmpl.Execute(w, nil); err != nil {
-		log.Printf("welcome template execute error: %v", err)
+		log.Printf("welcome template error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 }
 
-// indexHandler rend la page principale (jeu).
-// IMPORTANT (bug initial corrigé): Dans le template, à l'intérieur des {{range}}, le point (.) change de valeur.
-// Pour accéder au plateau on doit ancrer le contexte racine avec $. Exemple utilisé:  {{ $cell := index $.Board $r $c }}
-// Sans cela certaines cases n'étaient pas évaluées correctement et pouvaient ne pas s'afficher.
+// menuHandler shows the base menu to choose a mode
+func menuHandler(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	defer mu.Unlock()
+	if err := menuTmpl.Execute(w, state); err != nil {
+		log.Printf("menu template error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// indexHandler renders the current game mode UI
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
-	if err := gameTmpl.Execute(w, state); err != nil {
+	if err := indexTmpl.Execute(w, state); err != nil {
 		log.Printf("template execute error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
 	}
 }
 
-// formPlayHandler gère le dépôt d'un jeton dans une colonne via le formulaire.
 func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		log.Printf("ParseForm error: %v", err)
 		http.Error(w, "Bad Request", http.StatusBadRequest)
 		return
 	}
 
-	// Debug logging
-	log.Printf("Received POST /play - Form values: %v", r.Form)
-
 	colStr := r.FormValue("column")
-	if colStr == "" {
-		log.Printf("Missing 'column' parameter in form")
-		http.Error(w, "Bad Request: missing column parameter", http.StatusBadRequest)
-		return
-	}
+	log.Printf("Received column value: %q", colStr)
+
 	var col int
 	if _, err := fmt.Sscanf(colStr, "%d", &col); err != nil {
-		log.Printf("Invalid column value: %s", colStr)
+		log.Printf("Error parsing column %q: %v", colStr, err)
 		http.Error(w, "Invalid column", http.StatusBadRequest)
 		return
 	}
@@ -122,16 +110,14 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if state.Finished {
-		http.Redirect(w, r, "/game", http.StatusSeeOther)
-		return
-	}
-	if col < 0 || col >= state.Cols {
-		http.Redirect(w, r, "/game", http.StatusSeeOther)
-		return
-	}
+	log.Printf("Parsed column: %d, Cols: %d", col, state.Cols)
 
+	if state.Finished || col < 0 || col >= state.Cols {
+		http.Redirect(w, r, "/game", http.StatusSeeOther)
+		return
+	}
 	placed := false
+	// Chercher la première case vide depuis le bas (en utilisant state.Rows)
 	for rr := state.Rows - 1; rr >= 0; rr-- {
 		if state.Board[rr][col] == "" {
 			state.Board[rr][col] = state.Next
@@ -144,11 +130,10 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if winner := power4.Winner(state.Board, state.Rows, state.Cols, state.WinLength); winner != "" {
+	// Utiliser WinnerWithLength pour vérifier avec le bon nombre d'alignements
+	if winner := game.WinnerWithLength(state.Board, state.Rows, state.Cols, state.WinLength); winner != "" {
 		state.Winner = winner
 		state.Finished = true
-		// Agrandir la grille pour la prochaine partie
-		expandBoard()
 	} else {
 		if state.Next == "R" {
 			state.Next = "Y"
@@ -159,38 +144,84 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
-// formResetHandler remet la partie à zéro.
 func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	mu.Lock()
-	// Réinitialiser aux dimensions de base
+	defer mu.Unlock()
+
+	// En mode exponentiel, si on a gagné, on augmente le défi
+	if state.Mode == "exponentiel" && state.Winner != "" {
+		state.WinLength++
+		log.Printf("Mode exponentiel: nouveau défi = %d alignés", state.WinLength)
+	}
+
+	resetBoard()
+	http.Redirect(w, r, "/game", http.StatusSeeOther)
+}
+
+// restartModeHandler remet complètement à zéro le mode exponentiel (retour à 6×7, puissance 4)
+func restartModeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	
+	// Réinitialiser complètement au départ
+	state.WinLength = 4
 	state.Rows = 6
 	state.Cols = 7
-	state.WinLength = 4
+	log.Printf("Mode exponentiel: réinitialisé à Puissance 4 (6×7)")
+	
 	resetBoard()
-	mu.Unlock()
+	http.Redirect(w, r, "/game", http.StatusSeeOther)
+}
+
+// setModeHandler changes the current mode and resets the board, then goes to /game
+func setModeHandler(w http.ResponseWriter, r *http.Request) {
+	mode := r.FormValue("mode")
+	if mode == "" {
+		mode = r.URL.Query().Get("mode")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	switch mode {
+	case "exponentiel":
+		state.Mode = "exponentiel"
+		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+	default:
+		state.Mode = "exponentiel"
+		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+	}
+	for r := 0; r < 6; r++ {
+		for c := 0; c < 7; c++ {
+			state.Board[r][c] = ""
+		}
+	}
+	state.Next = "R"
+	state.Winner = ""
+	state.Finished = false
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
 func main() {
 	resetBoard()
-
 	http.HandleFunc("/", welcomeHandler)
+	http.HandleFunc("/menu", menuHandler)
 	http.HandleFunc("/game", indexHandler)
 	http.HandleFunc("/play", formPlayHandler)
 	http.HandleFunc("/reset", formResetHandler)
-
-	// Fichiers statiques (CSS, JS)
+	http.HandleFunc("/restart-mode", restartModeHandler)
+	http.HandleFunc("/set-mode", setModeHandler)
+	// Static assets
 	fs := http.FileServer(http.Dir("templates"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	// Images statiques
 	imgFs := http.FileServer(http.Dir("Images"))
 	http.Handle("/images/", http.StripPrefix("/images/", imgFs))
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

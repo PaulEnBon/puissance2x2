@@ -73,7 +73,7 @@
         <div class="info">
         <div id="status">
             {{if .Finished}}
-                {{if .Winner}}Gagnant: {{.Winner}} | Prochain défi: {{.WinLength}} pions alignés sur {{.Rows}}x{{.Cols}}!{{else}}Match nul{{end}}
+                {{if .Winner}}🎉 Gagnant: {{.Winner}}! | Prochain défi: {{add .WinLength 1}} pions alignés!{{else}}Match nul{{end}}
             {{else}}
                 Au tour de: {{.Next}} | Objectif: {{.WinLength}} pions alignés
             {{end}}
@@ -81,6 +81,9 @@
         <div style="display:inline-flex;align-items:center;gap:.5rem">
             <form method="post" action="/reset" style="display:inline">
                 <button id="reset" type="submit">Nouvelle partie</button>
+            </form>
+            <form method="post" action="/restart-mode" style="display:inline">
+                <button type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Recommencer en Puissance 4 (6×7)">🔄 Recommencer</button>
             </form>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
         </div>
@@ -93,7 +96,7 @@
                 <tr>
                     {{range $col := seq 0 (sub .Cols 1)}}
                     <th>
-                        <button class="col-button" name="column" value="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}}>▼</button>
+                        <button class="col-button" data-column="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}}>▼</button>
                     </th>
                     {{end}}
                 </tr>
@@ -116,31 +119,32 @@
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
-        // Prevent multiple form submissions and ensure column is always sent
+        // Ensure column value is set when button is clicked
         (function(){
             const form = document.getElementById('playForm');
             const hiddenColumn = document.getElementById('hiddenColumn');
             if(!form || !hiddenColumn) return;
             
+            // Add click handler to all column buttons
+            const buttons = form.querySelectorAll('.col-button');
+            buttons.forEach(function(button){
+                button.addEventListener('click', function(e){
+                    const columnValue = this.getAttribute('data-column');
+                    hiddenColumn.value = columnValue;
+                    console.log('[button click] set column to:', columnValue);
+                });
+            });
+            
             let isSubmitting = false;
-            let lastClickedColumn = null;
             
-            // Capture which column button was clicked
-            form.addEventListener('click', function(e){
-                if(e.target && e.target.classList.contains('col-button')){
-                    lastClickedColumn = e.target.value;
-                    hiddenColumn.value = lastClickedColumn;
-                    console.log('[form] column button clicked:', lastClickedColumn);
-                }
-            }, true);
-            
-            // Prevent submission without column or duplicate submissions
+            // Validate on submit
             form.addEventListener('submit', function(e){
-                // Check if we have a column value
                 const columnValue = hiddenColumn.value;
+                console.log('[form submit] column value:', columnValue);
+                
                 if(!columnValue || columnValue === ''){
                     e.preventDefault();
-                    console.log('[form] prevented submission without column value');
+                    console.log('[form] prevented submission - no column value');
                     return false;
                 }
                 
@@ -151,7 +155,6 @@
                 }
                 
                 isSubmitting = true;
-                console.log('[form] submitting with column:', columnValue);
             });
         })();
     </script>

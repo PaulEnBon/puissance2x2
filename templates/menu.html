@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Puissance 4 — Menu</title>
+  <link rel="stylesheet" href="/static/font.css" />
+  <style>
+    body{min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e5e7eb;font-family:system-ui,sans-serif}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.35);width:min(640px,92vw)}
+    h1{margin:0 0 12px 0;font-size:28px;color:#fff;text-align:center}
+    p{margin:0 0 20px 0;text-align:center;color:#cbd5e1}
+    .modes{display:grid;grid-template-columns:1fr;gap:12px;margin-top:8px}
+    .mode{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#0b1220;border:1px solid #1e293b;border-radius:10px}
+    .mode h3{margin:0;color:#f8fafc;font-size:18px}
+    .mode small{color:#94a3b8}
+    .actions{margin-top:16px;display:flex;gap:12px;justify-content:flex-end}
+    button, a.button{background:#2563eb;color:white;border:none;border-radius:10px;padding:10px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+    button:hover, a.button:hover{background:#1d4ed8}
+    .secondary{background:#0b1220;color:#e2e8f0;border:1px solid #1e293b}
+    .secondary:hover{background:#0f172a}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Choisir un mode de jeu</h1>
+    <p>Plusieurs modes arrivent. Pour l'instant, seul « exponentiel » est disponible.</p>
+    <form method="post" action="/set-mode" class="modes">
+      <div class="mode">
+        <div>
+          <h3>Exponentiel</h3>
+          <small>Mode actuel du plateau 6×7, 4 alignés pour gagner</small>
+        </div>
+        <button type="submit" name="mode" value="exponentiel">Jouer</button>
+      </div>
+      <!-- Placeholders pour futurs modes -->
+      <div class="mode" aria-disabled="true">
+        <div>
+          <h3>Classique</h3>
+          <small>Bientôt disponible</small>
+        </div>
+        <button type="button" class="secondary" disabled>À venir</button>
+      </div>
+      <div class="mode" aria-disabled="true">
+        <div>
+          <h3>Turbo</h3>
+          <small>Bientôt disponible</small>
+        </div>
+        <button type="button" class="secondary" disabled>À venir</button>
+      </div>
+    </form>
+    <div class="actions">
+      <a class="button secondary" href="/game">Continuer la partie</a>
+    </div>
+  </div>
+</body>
+</html>
