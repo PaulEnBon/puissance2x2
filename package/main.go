@@ -170,13 +170,13 @@ func restartModeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	
+
 	// Réinitialiser complètement au départ
 	state.WinLength = 4
 	state.Rows = 6
 	state.Cols = 7
 	log.Printf("Mode exponentiel: réinitialisé à Puissance 4 (6×7)")
-	
+
 	resetBoard()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
