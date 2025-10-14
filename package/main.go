@@ -157,10 +157,12 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// En mode exponentiel, si on a gagné, on augmente le défi
-	if state.Mode == "exponentiel" && state.Winner != "" {
-		state.WinLength++
-		log.Printf("Mode exponentiel: nouveau défi = %d alignés", state.WinLength)
+	// En mode exponentiel, on réinitialise complètement à 6×7 et puissance 4
+	if state.Mode == "exponentiel" {
+		state.WinLength = 4
+		state.Rows = 6
+		state.Cols = 7
+		log.Printf("Mode exponentiel: réinitialisé à Puissance 4 (6×7)")
 	}
 	// En mode classique, on ne change rien (toujours 6×7, 4 alignés)
 
@@ -239,5 +241,5 @@ func main() {
 		port = "8080"
 	}
 	log.Printf("Serveur lancé sur http://localhost:%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }
