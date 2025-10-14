@@ -32,9 +32,8 @@ var (
 )
 
 func resetBoard() {
-	// Agrandir le plateau si nécessaire pour le mode exponentiel
+	// En mode exponentiel, on augmente le plateau progressivement
 	if state.Mode == "exponentiel" {
-		// Pour le mode exponentiel, on augmente le plateau progressivement
 		// Chaque victoire ajoute +1 en lignes et colonnes
 		state.Rows = 6 + (state.WinLength - 4)
 		state.Cols = 7 + (state.WinLength - 4)
@@ -46,6 +45,12 @@ func resetBoard() {
 		if state.Cols > 15 {
 			state.Cols = 15
 		}
+	}
+	// En mode classique, on garde toujours 6x7
+	if state.Mode == "classique" {
+		state.Rows = 6
+		state.Cols = 7
+		state.WinLength = 4
 	}
 
 	// Nettoyer tout le plateau selon les dimensions actuelles
@@ -157,6 +162,7 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 		state.WinLength++
 		log.Printf("Mode exponentiel: nouveau défi = %d alignés", state.WinLength)
 	}
+	// En mode classique, on ne change rien (toujours 6×7, 4 alignés)
 
 	resetBoard()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
@@ -193,9 +199,15 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 	case "exponentiel":
 		state.Mode = "exponentiel"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+		log.Printf("Mode sélectionné: exponentiel (6×7, 4 alignés)")
+	case "classique":
+		state.Mode = "classique"
+		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+		log.Printf("Mode sélectionné: classique (6×7, 4 alignés)")
 	default:
 		state.Mode = "exponentiel"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+		log.Printf("Mode par défaut: exponentiel (6×7, 4 alignés)")
 	}
 	for r := 0; r < 6; r++ {
 		for c := 0; c < 7; c++ {

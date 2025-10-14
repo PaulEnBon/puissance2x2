@@ -6,7 +6,7 @@
     <title>Puissance 4</title>
     <link rel="stylesheet" href="/static/font.css">
     <style>
-        /* Particles.js background */
+        /* Particles.js background - caché en mode classique */
         #particles-js {
             position: fixed;
             width: 100%;
@@ -16,6 +16,16 @@
             z-index: 0;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
+        
+        /* Mode classique : fond rétro */
+        body.mode-classique #particles-js {
+            display: none;
+        }
+        body.mode-classique {
+            background: url('/images/retro-background.gif') no-repeat center center fixed;
+            background-size: cover;
+        }
+        
         /* Background image */
         body {
             margin: 0;
@@ -23,9 +33,10 @@
             min-height: 100vh;
             font-family: system-ui, sans-serif;
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
             justify-content: center;
+            gap: 2rem;
             position: relative;
         }
         /* Game container centered */
@@ -37,6 +48,53 @@
             max-width: 650px;
             position: relative;
             z-index: 1;
+        }
+        /* Scoreboard */
+        .scoreboard {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            min-width: 200px;
+            position: relative;
+            z-index: 1;
+        }
+        .scoreboard h2 {
+            margin: 0 0 1rem 0;
+            font-size: 1.25rem;
+            text-align: center;
+            color: #0f172a;
+        }
+        .score-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            background: #f1f5f9;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .score-item.player-r {
+            border-left-color: #ef4444;
+        }
+        .score-item.player-y {
+            border-left-color: #f59e0b;
+        }
+        .score-item .player-name {
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .score-item .player-score {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #0f172a;
+        }
+        @media (max-width: 1024px) {
+            body {
+                flex-direction: column;
+                gap: 1rem;
+            }
         }
         h1 {
             margin: 0 0 1rem 0;
@@ -119,7 +177,7 @@
         }
     </style>
 </head>
-<body>
+<body class="mode-{{.Mode}}">
     <div class="game-container">
         <h1>Puissance 4</h1>
         <div class="info">
@@ -137,9 +195,7 @@
             <form method="post" action="/reset" style="display:inline">
                 <button id="reset" type="submit">Nouvelle partie</button>
             </form>
-            <form method="post" action="/restart-mode" style="display:inline">
-                <button type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Recommencer en Puissance 4 (6×7)">🔄 Recommencer</button>
-            </form>
+            <button id="resetScores" type="button" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser les scores">🔄 Reset</button>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
         </div>
     </div>
@@ -172,15 +228,62 @@
     </form>
     </div>
     
+    <!-- Scoreboard -->
+    <div class="scoreboard">
+        <h2>🏆 Scores</h2>
+        <div class="score-item player-r">
+            <span class="player-name">🔴 Joueur 1</span>
+            <span class="player-score" id="scoreR">0</span>
+        </div>
+        <div class="score-item player-y">
+            <span class="player-name">🟡 Joueur 2</span>
+            <span class="player-score" id="scoreY">0</span>
+        </div>
+    </div>
+    
     <!-- Particles.js container for animated background -->
     <div id="particles-js"></div>
     
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
+        // Détecter le mode de jeu
+        var gameMode = document.body.className.replace('mode-', '');
+        console.log('[Mode] Mode de jeu actuel:', gameMode);
+        
         // Variable pour compter le nombre de clics en jeu (persistante)
         var compte = parseInt(localStorage.getItem('compteClics')) || 0;
         console.log('[Init] Compte de clics chargé:', compte);
+        
+        // Gestion des scores
+        var scoreR = parseInt(localStorage.getItem('scoreR')) || 0;
+        var scoreY = parseInt(localStorage.getItem('scoreY')) || 0;
+        
+        // Afficher les scores
+        document.getElementById('scoreR').textContent = scoreR;
+        document.getElementById('scoreY').textContent = scoreY;
+        console.log('[Scores] Joueur 1 (R):', scoreR, '| Joueur 2 (Y):', scoreY);
+        
+        // Détecter une victoire et incrémenter le score
+        (function() {
+            var statusElement = document.getElementById('status');
+            if(statusElement) {
+                var statusText = statusElement.textContent;
+                if(statusText.indexOf('Gagnant: R') !== -1) {
+                    // Joueur 1 a gagné
+                    scoreR++;
+                    localStorage.setItem('scoreR', scoreR);
+                    document.getElementById('scoreR').textContent = scoreR;
+                    console.log('[Victoire] Joueur 1 (R) gagne! Nouveau score:', scoreR);
+                } else if(statusText.indexOf('Gagnant: Y') !== -1) {
+                    // Joueur 2 a gagné
+                    scoreY++;
+                    localStorage.setItem('scoreY', scoreY);
+                    document.getElementById('scoreY').textContent = scoreY;
+                    console.log('[Victoire] Joueur 2 (Y) gagne! Nouveau score:', scoreY);
+                }
+            }
+        })();
         
         // Afficher le compte dans l'interface
         var compteValueElement = document.getElementById('compteValue');
@@ -190,6 +293,12 @@
         
         // Fonction pour créer l'effet ghost
         function createGhostEffect(buttonElement) {
+            // Désactiver l'effet ghost en mode classique
+            if(gameMode === 'classique') {
+                console.log('[Ghost] Effet désactivé en mode classique');
+                return;
+            }
+            
             // Utiliser l'animation ghost
             var ghostImage = '/images/anim_ghost.png';
             
@@ -211,6 +320,21 @@
                     ghost.parentNode.removeChild(ghost);
                 }
             }, 3000);
+        }
+        
+        // Bouton Reset pour réinitialiser les scores
+        var resetScoresBtn = document.getElementById('resetScores');
+        if(resetScoresBtn) {
+            resetScoresBtn.addEventListener('click', function() {
+                if(confirm('Voulez-vous vraiment réinitialiser tous les scores à 0 ?')) {
+                    localStorage.setItem('scoreR', '0');
+                    localStorage.setItem('scoreY', '0');
+                    document.getElementById('scoreR').textContent = '0';
+                    document.getElementById('scoreY').textContent = '0';
+                    console.log('[Reset] Scores réinitialisés à 0');
+                    alert('Scores réinitialisés !');
+                }
+            });
         }
         
         // Ensure column value is set when button is clicked
@@ -265,12 +389,14 @@
     <!-- Particles.js library -->
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script>
-        // Récupérer le compte de clics pour définir le nombre de particules
-        var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 0;
-        console.log('[Particles] Nombre de particules:', nombreParticules);
-        
-        // Configuration de base pour particles.js
-        var particlesConfig = {
+        // Ne pas initialiser particles.js en mode classique
+        if(gameMode !== 'classique') {
+            // Récupérer le compte de clics pour définir le nombre de particules
+            var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 0;
+            console.log('[Particles] Nombre de particules:', nombreParticules);
+            
+            // Configuration de base pour particles.js
+            var particlesConfig = {
             "particles": {
                 "number": {
                     "value": nombreParticules,
@@ -360,6 +486,9 @@
         
         // Initialiser particles.js avec la bonne image
         particlesJS('particles-js', particlesConfig);
+        } else {
+            console.log('[Particles] Désactivées en mode classique');
+        }
     </script>
 </body>
 </html>
