@@ -6,18 +6,27 @@
     <title>Puissance 4</title>
     <link rel="stylesheet" href="/static/font.css">
     <style>
+        /* Particles.js background */
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
         /* Background image */
         body {
             margin: 0;
             padding: 0;
             min-height: 100vh;
             font-family: system-ui, sans-serif;
-            background: url('/images/principal1.gif') no-repeat center center fixed;
-            background-size: cover;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
         /* Game container centered */
         .game-container {
@@ -26,6 +35,8 @@
             padding: 2rem;
             box-shadow: 0 8px 32px rgba(0,0,0,0.3);
             max-width: 650px;
+            position: relative;
+            z-index: 1;
         }
         h1 {
             margin: 0 0 1rem 0;
@@ -116,9 +127,17 @@
         </table>
     </form>
     </div>
+    
+    <!-- Particles.js container for animated background -->
+    <div id="particles-js"></div>
+    
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
+        // Variable pour compter le nombre de clics en jeu (persistante)
+        var compte = parseInt(localStorage.getItem('compteClics')) || 0;
+        console.log('[Init] Compte de clics chargé:', compte);
+        
         // Ensure column value is set when button is clicked
         (function(){
             const form = document.getElementById('playForm');
@@ -131,7 +150,7 @@
                 button.addEventListener('click', function(e){
                     const columnValue = this.getAttribute('data-column');
                     hiddenColumn.value = columnValue;
-                    console.log('[button click] set column to:', columnValue);
+                    console.log('[button click] set column to:', columnValue, '| Clics actuels:', compte);
                 });
             });
             
@@ -140,7 +159,6 @@
             // Validate on submit
             form.addEventListener('submit', function(e){
                 const columnValue = hiddenColumn.value;
-                console.log('[form submit] column value:', columnValue);
                 
                 if(!columnValue || columnValue === ''){
                     e.preventDefault();
@@ -154,10 +172,149 @@
                     return false;
                 }
                 
+                // Incrémenter et sauvegarder le compteur AVANT la soumission
+                compte++;
+                localStorage.setItem('compteClics', compte);
+                console.log('[form submit] Colonne:', columnValue, '| Nouveau compte sauvegardé:', compte);
+                
                 isSubmitting = true;
             });
         })();
     </script>
     <script src="/static/app.js" defer></script>
+    
+    <!-- Particles.js library -->
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script>
+        // Récupérer le compte de clics pour définir le nombre de particules
+        var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 10; // Minimum 10 particules
+        console.log('[Particles] Nombre de particules:', nombreParticules);
+        
+        // Configuration de base pour particles.js
+        var particlesConfig = {
+            "particles": {
+                "number": {
+                    "value": nombreParticules,
+                    "density": {
+                        "enable": true,
+                        "value_area": 800
+                    }
+                },
+                "color": {
+                    "value": "#ffffff"
+                },
+                "shape": {
+                    "type": "image",
+                    "stroke": {
+                        "width": 0,
+                        "color": "#000000"
+                    },
+                    "image": {
+                        "src": "/images/tete-erwann.png",
+                        "width": 100,
+                        "height": 100
+                    }
+                },
+                "opacity": {
+                    "value": 0.7,
+                    "random": true,
+                    "anim": {
+                        "enable": true,
+                        "speed": 1,
+                        "opacity_min": 0.3,
+                        "sync": false
+                    }
+                },
+                "size": {
+                    "value": 80,
+                    "random": true,
+                    "anim": {
+                        "enable": false,
+                        "speed": 40,
+                        "size_min": 50,
+                        "sync": false
+                    }
+                },
+                "line_linked": {
+                    "enable": false
+                },
+                "move": {
+                    "enable": true,
+                    "speed": 1.5,
+                    "direction": "none",
+                    "random": true,
+                    "straight": false,
+                    "out_mode": "out",
+                    "bounce": false,
+                    "attract": {
+                        "enable": false,
+                        "rotateX": 600,
+                        "rotateY": 1200
+                    }
+                }
+            },
+            "interactivity": {
+                "detect_on": "canvas",
+                "events": {
+                    "onhover": {
+                        "enable": true,
+                        "mode": "bubble"
+                    },
+                    "onclick": {
+                        "enable": true,
+                        "mode": "push"
+                    },
+                    "resize": true
+                },
+                "modes": {
+                    "bubble": {
+                        "distance": 150,
+                        "size": 100,
+                        "duration": 2,
+                        "opacity": 1,
+                        "speed": 3
+                    },
+                    "push": {
+                        "particles_nb": 2
+                    }
+                }
+            },
+            "retina_detect": true
+        };
+
+        // Initialiser particles.js
+        particlesJS('particles-js', particlesConfig);
+        
+        // Choisir aléatoirement UNE SEULE image pour TOUTES les particules
+        var images = ['/images/tete-erwann.png', '/images/tete-gabriel.png'];
+        var randomChoice = Math.floor(Math.random() * 2);
+        var chosenImage = new Image();
+        
+        console.log('Image choisie pour cette session:', randomChoice === 0 ? 'Erwann' : 'Gabriel');
+        
+        // Attendre que l'image soit complètement chargée
+        chosenImage.onload = function() {
+            // Après que l'image est chargée, l'appliquer aux particules
+            setTimeout(function() {
+                if (window.pJSDom && window.pJSDom[0] && window.pJSDom[0].pJS.particles.array) {
+                    var particles = window.pJSDom[0].pJS.particles.array;
+                    
+                    particles.forEach(function(particle) {
+                        // Toutes les particules utilisent la même image choisie
+                        particle.img = {
+                            obj: chosenImage,
+                            src: chosenImage.src,
+                            loaded: true
+                        };
+                    });
+                    
+                    console.log('Toutes les', particles.length, 'particules affichent:', randomChoice === 0 ? 'Erwann' : 'Gabriel');
+                }
+            }, 300);
+        };
+        
+        // Charger l'image (déclenche onload)
+        chosenImage.src = images[randomChoice];
+    </script>
 </body>
 </html>

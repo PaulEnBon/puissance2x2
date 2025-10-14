@@ -313,54 +313,67 @@
     });
   }
 
-  // Confetti burst using same canvas: quick particle burst
-  function confettiBurst(){
-    if(!ctx || !canvas) return;
-    console.debug('[bg] confettiBurst start');
-    const pieces = [];
-    const cx = w/2; const cy = h/3;
-    for(let i=0;i<64;i++){
-      pieces.push({
-        x: cx, y: cy,
-        vx: (Math.random()-0.5)*8,
-        vy: -Math.random()*12 - 4,
-        r: 3 + Math.random()*6,
-        hue: 20 + Math.random()*300,
-        life: 120 + Math.random()*80
-      });
-    }
-    let t0 = performance.now();
-    function step(now){
-      const dt = Math.min(32, now - t0); t0 = now;
-      // draw on top
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      for(let i=pieces.length-1;i>=0;i--){
-        const p = pieces[i];
-        p.vy += 0.45 * (dt/16);
-        p.x += p.vx * (dt/16);
-        p.y += p.vy * (dt/16);
-        p.life -= dt/16;
-        if(p.life <= 0){ pieces.splice(i,1); continue; }
-        ctx.fillStyle = `hsl(${p.hue},80%,55%)`;
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y, p.r, p.r*0.6, Math.random()*Math.PI, 0, Math.PI*2);
-        ctx.fill();
+  // Explosion vidéo en plein écran au lieu de confettis
+  function explosionVideo(){
+    console.debug('[bg] explosionVideo start');
+    
+    // Créer l'overlay vidéo
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    overlay.style.zIndex = '9999';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.pointerEvents = 'none';
+    
+    // Créer la vidéo
+    const video = document.createElement('video');
+    video.src = '/images/effet_explosion.mp4';
+    video.autoplay = true;
+    video.muted = false; // Avec son
+    video.style.maxWidth = '80%';
+    video.style.maxHeight = '80%';
+    video.style.objectFit = 'contain';
+    
+    overlay.appendChild(video);
+    document.body.appendChild(overlay);
+    
+    // Retirer l'overlay après la fin de la vidéo
+    video.addEventListener('ended', () => {
+      setTimeout(() => {
+        overlay.style.transition = 'opacity 0.5s';
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+          if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }, 500);
+      }, 300);
+    });
+    
+    // Fallback: retirer après 5 secondes max
+    setTimeout(() => {
+      if(overlay.parentNode){
+        overlay.style.transition = 'opacity 0.5s';
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+          if(overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        }, 500);
       }
-      ctx.restore();
-      if(pieces.length>0) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
+    }, 5000);
   }
 
-  // Detect winner on load and fire confetti
+  // Detect winner on load and fire explosion video
   function detectWinner(){
     const st = document.getElementById('status');
     if(!st) return;
     const txt = st.textContent || '';
     if(txt.indexOf('Gagnant') !== -1 || txt.indexOf('Gagnant:') !== -1){
       // small delay to let page settle
-      setTimeout(()=> confettiBurst(), 200);
+      setTimeout(()=> explosionVideo(), 200);
     }
   }
 
