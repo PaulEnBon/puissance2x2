@@ -246,11 +246,23 @@
             border-color: #93c5fd;
         }
         
-        .booster-card.used {
+        .booster-card.used,
+        .booster-card.disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
             border-color: #4b5563;
+        }
+        
+        .booster-card.disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Griser les panneaux quand ce n'est pas le tour du joueur */
+        .boosters-panel.inactive {
+            opacity: 0.4;
+            pointer-events: none;
         }
         
         .booster-header {
@@ -549,6 +561,13 @@
         
         // Fonction pour utiliser un booster
         function useBooster(boosterId, player) {
+            // Vérifier que c'est bien le tour du joueur
+            var currentPlayer = getCurrentPlayer();
+            if(currentPlayer !== player) {
+                console.log('[Boosters] Ce n\'est pas le tour du joueur', player);
+                return;
+            }
+            
             var boostersList = player === 'R' ? boostersR : boostersY;
             var booster = boostersList.find(b => b.id === boosterId);
             if(!booster || booster.used) return;
@@ -560,6 +579,62 @@
             alert('Booster activé par Joueur ' + player + ': ' + booster.name + '\n\n' + booster.description + '\n\n(Fonctionnalité à implémenter)');
             
             renderBoosters();
+        }
+        
+        // Fonction pour détecter le joueur actif
+        function getCurrentPlayer() {
+            var statusElement = document.getElementById('status');
+            if(!statusElement) return null;
+            
+            var statusText = statusElement.textContent;
+            
+            // Chercher "Au tour de: [Nom] 🔴" ou "Au tour de: [Nom] 🟡"
+            if(statusText.indexOf('🔴') !== -1 && statusText.indexOf('Au tour de') !== -1) {
+                return 'R';
+            } else if(statusText.indexOf('🟡') !== -1 && statusText.indexOf('Au tour de') !== -1) {
+                return 'Y';
+            }
+            
+            return null;
+        }
+        
+        // Fonction pour mettre à jour l'état actif/inactif des panneaux de boosters
+        function updateBoosterPanelsState() {
+            if(gameMode !== 'turbo') return;
+            
+            var currentPlayer = getCurrentPlayer();
+            
+            if(!currentPlayer) {
+                // Partie terminée, désactiver les deux panneaux
+                if(boostersPanelR) boostersPanelR.classList.add('inactive');
+                if(boostersPanelY) boostersPanelY.classList.add('inactive');
+                return;
+            }
+            
+            // Activer le panneau du joueur actif, désactiver l'autre
+            if(currentPlayer === 'R') {
+                if(boostersPanelR) boostersPanelR.classList.remove('inactive');
+                if(boostersPanelY) boostersPanelY.classList.add('inactive');
+            } else {
+                if(boostersPanelR) boostersPanelR.classList.add('inactive');
+                if(boostersPanelY) boostersPanelY.classList.remove('inactive');
+            }
+            
+            console.log('[Boosters] Panneau actif pour joueur:', currentPlayer);
+        }
+        
+        // Mettre à jour l'état des panneaux au chargement et après chaque coup
+        if(gameMode === 'turbo') {
+            updateBoosterPanelsState();
+            
+            // Observer les changements dans le status pour mettre à jour les panneaux
+            var statusElement = document.getElementById('status');
+            if(statusElement && window.MutationObserver) {
+                var observer = new MutationObserver(function() {
+                    updateBoosterPanelsState();
+                });
+                observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
+            }
         }
         
         // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
