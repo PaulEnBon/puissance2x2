@@ -111,6 +111,28 @@
     .cell { width: 48px; height: 48px; border-radius: 50%; margin: 5px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
         .cell.R { background: #ef4444; box-shadow: none; border-color: rgba(0,0,0,0.06); }
         .cell.Y { background: #f59e0b; box-shadow: none; border-color: rgba(0,0,0,0.06); }
+    /* Booster cell styling */
+    .board td.booster-cell { 
+        background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%) !important;
+        box-shadow: 0 0 20px rgba(236, 72, 153, 0.6);
+        animation: boosterGlow 2s ease-in-out infinite;
+        position: relative;
+    }
+    .board td.booster-cell::before {
+        content: '⚡';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 30px;
+        opacity: 0.8;
+        pointer-events: none;
+        z-index: 1;
+    }
+    @keyframes boosterGlow {
+        0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.6); }
+        50% { box-shadow: 0 0 35px rgba(236, 72, 153, 1); }
+    }
     /* column buttons - bigger */
     .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 60px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
@@ -397,7 +419,7 @@
                 {{range $r := seq 0 (sub $.Rows 1)}}
                 <tr>
                     {{range $c := seq 0 (sub $.Cols 1)}}
-                    <td>
+                    <td {{if index $.BoosterCells $r $c}}class="booster-cell" data-booster="{{index $.BoosterCells $r $c}}"{{end}}>
                         {{ $cell := index $.Board $r $c }}
                         <span class="cell {{if $cell}}{{$cell}}{{end}}"></span>
                     </td>
@@ -1161,14 +1183,23 @@
             }
         }
         
-        // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
+        // Détecter si un booster a été récupéré (via query params)
         if(isTurboMode()) {
-            setTimeout(function() {
-                addBooster('double-shot', 'R');
-                addBooster('remove-piece', 'R');
-                addBooster('block-column', 'Y');
-                addBooster('wildcard', 'Y');
-            }, 1000);
+            var urlParams = new URLSearchParams(window.location.search);
+            var boosterType = urlParams.get('booster');
+            var player = urlParams.get('player');
+            
+            if(boosterType && player) {
+                console.log('[Booster] Booster récupéré!', boosterType, 'pour joueur', player);
+                addBooster(boosterType, player);
+                
+                // Nettoyer l'URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                // Afficher une notification
+                var boosterName = boosterTypes[boosterType] ? boosterTypes[boosterType].name : boosterType;
+                alert('🎉 Booster récupéré!\n\n' + boosterName + '\n\nJoueur: ' + (player === 'R' ? '{{.Player1Name}} 🔴' : '{{.Player2Name}} 🟡'));
+            }
         }
         
         // Variable pour compter le nombre de clics en jeu (persistante)

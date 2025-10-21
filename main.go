@@ -72,12 +72,14 @@ var (
 // ---------------- PARTIES AVEC CODES UNIQUES ----------------
 
 type Party struct {
-	Code       string
-	CreatedAt  time.Time
-	State      game.GameState
-	Clients    map[*websocket.Conn]bool
-	ClientTeam map[*websocket.Conn]string // Stocke l'équipe de chaque client ('R' ou 'Y')
-	Mu         sync.Mutex
+	Code           string
+	CreatedAt      time.Time
+	State          game.GameState
+	Clients        map[*websocket.Conn]bool
+	ClientTeam     map[*websocket.Conn]string // Stocke l'équipe de chaque client ('R' ou 'Y')
+	DoublePlayNext bool                       // Pour le booster "double-shot"
+	BlockedColumn  int                        // Colonne bloquée par le booster "block-column"
+	Mu             sync.Mutex
 }
 
 var (
@@ -109,18 +111,71 @@ func createPartyHandler(w http.ResponseWriter, r *http.Request) {
 		Rows: 6, Cols: 7, WinLength: 4,
 		Next: "R", Mode: mode,
 	}
+
 	p := &Party{
-		Code:       code,
-		CreatedAt:  time.Now(),
-		State:      newState,
-		Clients:    make(map[*websocket.Conn]bool),
-		ClientTeam: make(map[*websocket.Conn]string),
+		Code:          code,
+		CreatedAt:     time.Now(),
+		State:         newState,
+		Clients:       make(map[*websocket.Conn]bool),
+		ClientTeam:    make(map[*websocket.Conn]string),
+		BlockedColumn: -1,
 	}
+
+	// Générer les cases boosters si mode turbo
+	if strings.Contains(mode, "turbo") {
+		generateBoosterCells(&p.State)
+	}
+
 	parties[code] = p
 
 	log.Printf("✅ Nouvelle partie créée : %s (mode: %s)", code, mode)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
+}
+
+// generateBoosterCells génère aléatoirement des cases contenant des boosters
+func generateBoosterCells(state *game.GameState) {
+	// Utiliser un générateur aléatoire local (Go 1.20+)
+	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+
+	// Liste des types de boosters disponibles
+	boosterTypes := []string{
+		"double-shot",
+		"remove-piece",
+		"block-column",
+		"swap-colors",
+		"wildcard",
+	}
+
+	// Nombre de boosters à placer (1-2 de chaque type)
+	numBoostersPerType := 2
+
+	// Créer une liste de toutes les positions possibles
+	type Position struct {
+		row, col int
+	}
+	var positions []Position
+	for r := 0; r < state.Rows; r++ {
+		for c := 0; c < state.Cols; c++ {
+			positions = append(positions, Position{r, c})
+		}
+	}
+
+	// Mélanger les positions
+	rng.Shuffle(len(positions), func(i, j int) {
+		positions[i], positions[j] = positions[j], positions[i]
+	})
+
+	// Placer les boosters
+	posIndex := 0
+	for _, boosterType := range boosterTypes {
+		for i := 0; i < numBoostersPerType && posIndex < len(positions); i++ {
+			pos := positions[posIndex]
+			state.BoosterCells[pos.row][pos.col] = boosterType
+			posIndex++
+			log.Printf("[Boosters] Case booster placée en (%d,%d): %s", pos.row, pos.col, boosterType)
+		}
+	}
 }
 
 func joinPartyHandler(w http.ResponseWriter, r *http.Request) {
@@ -204,31 +259,78 @@ func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 		return
 	}
 
+	// Vérifier si la colonne est bloquée en mode turbo
+	if strings.Contains(p.State.Mode, "turbo") && col == p.BlockedColumn {
+		log.Printf("Colonne %d bloquée, coup impossible", col)
+		p.BlockedColumn = -1 // Débloquer après tentative
+		errorMsg := map[string]interface{}{
+			"type":    "error",
+			"message": "Cette colonne est bloquée!",
+		}
+		_ = conn.WriteJSON(errorMsg)
+		return
+	}
+
 	if p.State.Finished || col < 0 || col >= p.State.Cols {
 		return
 	}
 
+	placedRow := -1
 	for r := p.State.Rows - 1; r >= 0; r-- {
 		if p.State.Board[r][col] == "" {
 			p.State.Board[r][col] = p.State.Next
+			placedRow = r
 			break
 		}
+	}
+
+	if placedRow == -1 {
+		return // Colonne pleine
+	}
+
+	// Vérifier si le joueur a placé son pion sur une case booster
+	boosterObtained := ""
+	playerWhoGotBooster := ""
+	if strings.Contains(p.State.Mode, "turbo") && p.State.BoosterCells[placedRow][col] != "" {
+		boosterType := p.State.BoosterCells[placedRow][col]
+		log.Printf("[Booster] Joueur %s a récupéré un booster: %s en (%d,%d)", p.State.Next, boosterType, placedRow, col)
+
+		boosterObtained = boosterType
+		playerWhoGotBooster = p.State.Next
+		p.State.BoosterCells[placedRow][col] = "" // Retirer le booster de la grille
 	}
 
 	if winner := game.WinnerWithLength(p.State.Board, p.State.Rows, p.State.Cols, p.State.WinLength); winner != "" {
 		p.State.Winner = winner
 		p.State.Finished = true
 	} else {
-		if p.State.Next == "R" {
-			p.State.Next = "Y"
+		// Changer de joueur sauf si double coup est actif
+		if strings.Contains(p.State.Mode, "turbo") && p.DoublePlayNext {
+			// Ne pas changer de joueur, désactiver le double coup
+			p.DoublePlayNext = false
+			log.Printf("[Booster] Double coup utilisé, même joueur rejoue")
 		} else {
-			p.State.Next = "R"
+			if p.State.Next == "R" {
+				p.State.Next = "Y"
+			} else {
+				p.State.Next = "R"
+			}
 		}
 	}
 	p.State.Version++
 
+	// Envoyer la mise à jour avec le booster éventuel
 	for c := range p.Clients {
-		_ = c.WriteJSON(p.State)
+		response := map[string]interface{}{
+			"type":    "state",
+			"state":   p.State,
+			"blocked": p.BlockedColumn,
+		}
+		if boosterObtained != "" && c == conn {
+			response["booster"] = boosterObtained
+			response["player"] = playerWhoGotBooster
+		}
+		_ = c.WriteJSON(response)
 	}
 }
 
@@ -294,7 +396,7 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 		GameState:     p.State,
 		Player1Name:   playerNames[0],
 		Player2Name:   playerNames[1],
-		BlockedColumn: -1,
+		BlockedColumn: p.BlockedColumn,
 		Code:          code,
 	}
 
@@ -307,8 +409,6 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 // ---------------- MAIN ----------------
 
 func main() {
-	mrand.Seed(time.Now().UnixNano())
-
 	http.HandleFunc("/", welcomeHandler)
 	http.HandleFunc("/players", playersHandler)
 	http.HandleFunc("/set-players", setPlayersHandler)
