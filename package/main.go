@@ -17,9 +17,11 @@ import (
 )
 
 var (
-	state       = game.GameState{Next: "R", Mode: "exponentiel", Rows: 6, Cols: 7, WinLength: 4}
-	mu          sync.Mutex
-	playerNames = []string{"Joueur 1", "Joueur 2"} // Noms des joueurs
+	state          = game.GameState{Next: "R", Mode: "exponentiel", Rows: 6, Cols: 7, WinLength: 4}
+	mu             sync.Mutex
+	playerNames    = []string{"Joueur 1", "Joueur 2"} // Noms des joueurs
+	doublePlayNext = false                            // Pour le booster "double-shot"
+	blockedColumn  = -1                               // Colonne bloquée par le booster "block-column"
 )
 
 var (
@@ -418,12 +420,14 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// Créer une structure pour passer à la fois le state et les noms des joueurs
 	data := struct {
 		game.GameState
-		Player1Name string
-		Player2Name string
+		Player1Name   string
+		Player2Name   string
+		BlockedColumn int
 	}{
-		GameState:   state,
-		Player1Name: playerNames[0],
-		Player2Name: playerNames[1],
+		GameState:     state,
+		Player1Name:   playerNames[0],
+		Player2Name:   playerNames[1],
+		BlockedColumn: blockedColumn,
 	}
 
 	if err := indexTmpl.Execute(w, data); err != nil {
@@ -457,6 +461,14 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Parsed column: %d, Cols: %d", col, state.Cols)
 
+	// Vérifier si la colonne est bloquée en mode turbo
+	if state.Mode == "turbo" && col == blockedColumn {
+		log.Printf("Colonne %d bloquée, coup impossible", col)
+		blockedColumn = -1 // Débloquer après tentative
+		http.Redirect(w, r, "/game", http.StatusSeeOther)
+		return
+	}
+
 	if state.Finished || col < 0 || col >= state.Cols {
 		http.Redirect(w, r, "/game", http.StatusSeeOther)
 		return
@@ -480,10 +492,17 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 		state.Winner = winner
 		state.Finished = true
 	} else {
-		if state.Next == "R" {
-			state.Next = "Y"
+		// Changer de joueur sauf si double coup est actif
+		if state.Mode == "turbo" && doublePlayNext {
+			// Ne pas changer de joueur, désactiver le double coup
+			doublePlayNext = false
+			log.Printf("[Booster] Double coup utilisé, même joueur rejoue")
 		} else {
-			state.Next = "R"
+			if state.Next == "R" {
+				state.Next = "Y"
+			} else {
+				state.Next = "R"
+			}
 		}
 	}
 	// Incrémenter la version à chaque coup valide
@@ -656,6 +675,100 @@ func infoHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// boosterActionHandler gère les actions des boosters en mode turbo
+func boosterActionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	action := r.FormValue("action")
+	player := r.FormValue("player")
+
+	log.Printf("Booster action: %s by player %s", action, player)
+
+	switch action {
+	case "double-shot":
+		// Activer le double coup pour le prochain tour
+		doublePlayNext = true
+		log.Printf("[Booster] Double coup activé pour %s", player)
+
+	case "remove-piece":
+		// Retirer un pion adverse
+		row := r.FormValue("row")
+		col := r.FormValue("col")
+		var rowInt, colInt int
+		fmt.Sscanf(row, "%d", &rowInt)
+		fmt.Sscanf(col, "%d", &colInt)
+
+		if rowInt >= 0 && rowInt < state.Rows && colInt >= 0 && colInt < state.Cols {
+			state.Board[rowInt][colInt] = ""
+			log.Printf("[Booster] Pion retiré en (%d, %d)", rowInt, colInt)
+		}
+
+	case "block-column":
+		// Bloquer une colonne
+		col := r.FormValue("col")
+		fmt.Sscanf(col, "%d", &blockedColumn)
+		log.Printf("[Booster] Colonne %d bloquée", blockedColumn)
+
+	case "swap-colors":
+		// Échanger deux pions
+		row1 := r.FormValue("row1")
+		col1 := r.FormValue("col1")
+		row2 := r.FormValue("row2")
+		col2 := r.FormValue("col2")
+		var r1, c1, r2, c2 int
+		fmt.Sscanf(row1, "%d", &r1)
+		fmt.Sscanf(col1, "%d", &c1)
+		fmt.Sscanf(row2, "%d", &r2)
+		fmt.Sscanf(col2, "%d", &c2)
+
+		if r1 >= 0 && r1 < state.Rows && c1 >= 0 && c1 < state.Cols &&
+			r2 >= 0 && r2 < state.Rows && c2 >= 0 && c2 < state.Cols {
+			temp := state.Board[r1][c1]
+			state.Board[r1][c1] = state.Board[r2][c2]
+			state.Board[r2][c2] = temp
+			log.Printf("[Booster] Pions échangés: (%d,%d) <-> (%d,%d)", r1, c1, r2, c2)
+		}
+
+	case "wildcard":
+		// Placer un pion n'importe où
+		row := r.FormValue("row")
+		col := r.FormValue("col")
+		var rowInt, colInt int
+		fmt.Sscanf(row, "%d", &rowInt)
+		fmt.Sscanf(col, "%d", &colInt)
+
+		if rowInt >= 0 && rowInt < state.Rows && colInt >= 0 && colInt < state.Cols {
+			state.Board[rowInt][colInt] = player
+			log.Printf("[Booster] Joker placé en (%d, %d) par %s", rowInt, colInt, player)
+
+			// Vérifier victoire
+			if winner := game.WinnerWithLength(state.Board, state.Rows, state.Cols, state.WinLength); winner != "" {
+				state.Winner = winner
+				state.Finished = true
+			} else {
+				// Changer de joueur
+				if state.Next == "R" {
+					state.Next = "Y"
+				} else {
+					state.Next = "R"
+				}
+			}
+		}
+	}
+
+	http.Redirect(w, r, "/game", http.StatusSeeOther)
+}
+
 func main() {
 	resetBoard()
 	http.HandleFunc("/", welcomeHandler)
@@ -668,6 +781,7 @@ func main() {
 	http.HandleFunc("/state", stateHandler)
 	http.HandleFunc("/api/info", infoHandler)
 	http.HandleFunc("/play", formPlayHandler)
+	http.HandleFunc("/booster-action", boosterActionHandler)
 	http.HandleFunc("/next-level", nextLevelHandler)
 	http.HandleFunc("/reset", formResetHandler)
 	http.HandleFunc("/restart-mode", restartModeHandler)

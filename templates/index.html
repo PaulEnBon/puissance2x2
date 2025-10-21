@@ -115,6 +115,19 @@
     .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 60px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
     .col-button:disabled { opacity: 0.35; cursor: not-allowed; background: rgba(255,255,255,0.7); }
+    .col-button.blocked-column { 
+        background: #ef4444 !important; 
+        color: white !important; 
+        border-color: #dc2626 !important;
+        opacity: 1 !important;
+        cursor: not-allowed !important;
+        box-shadow: 0 0 15px rgba(239, 68, 68, 0.6) !important;
+        animation: blockPulse 2s ease-in-out infinite;
+    }
+    @keyframes blockPulse {
+        0%, 100% { box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+        50% { box-shadow: 0 0 25px rgba(239, 68, 68, 0.9); }
+    }
         .info { display:flex; gap:1rem; align-items:center }
     /* reset button distinctive */
     #reset { background: #1d4ed8; color: white; border: none; padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; }
@@ -247,11 +260,23 @@
             border-color: #93c5fd;
         }
         
-        .booster-card.used {
+        .booster-card.used,
+        .booster-card.disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
             border-color: #4b5563;
+        }
+        
+        .booster-card.disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Griser les panneaux quand ce n'est pas le tour du joueur */
+        .boosters-panel.inactive {
+            opacity: 0.4;
+            pointer-events: none;
         }
         
         .booster-header {
@@ -356,7 +381,7 @@
                 <tr>
                     {{range $col := seq 0 (sub .Cols 1)}}
                     <th>
-                        <button class="col-button" data-column="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}}>▼</button>
+                        <button class="col-button {{if eq $col $.BlockedColumn}}blocked-column{{end}}" data-column="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}} {{if eq $col $.BlockedColumn}}disabled{{end}}>{{if eq $col $.BlockedColumn}}🚫{{else}}▼{{end}}</button>
                     </th>
                     {{end}}
                 </tr>
@@ -601,8 +626,19 @@
             return card;
         }
         
+        // Variables globales pour les boosters actifs
+        var activeBooster = null;
+        var doublePlayActive = false;
+        
         // Fonction pour utiliser un booster
         function useBooster(boosterId, player) {
+            // Vérifier que c'est bien le tour du joueur
+            var currentPlayer = getCurrentPlayer();
+            if(currentPlayer !== player) {
+                console.log('[Boosters] Ce n\'est pas le tour du joueur', player);
+                return;
+            }
+            
             var boostersList = player === 'R' ? boostersR : boostersY;
             var booster = boostersList.find(b => b.id === boosterId);
             if(!booster || booster.used) return;
@@ -610,10 +646,412 @@
             console.log('[Boosters] Utilisation du booster par joueur', player, ':', booster.name);
             booster.used = true;
             
-            // TODO: Implémenter la logique de chaque booster
-            alert('Booster activé par Joueur ' + player + ': ' + booster.name + '\n\n' + booster.description + '\n\n(Fonctionnalité à implémenter)');
+            // Exécuter la logique selon le type de booster
+            switch(booster.type) {
+                case 'double-shot':
+                    activateDoubleShot(player);
+                    break;
+                case 'remove-piece':
+                    activateRemovePiece(player);
+                    break;
+                case 'block-column':
+                    activateBlockColumn(player);
+                    break;
+                case 'swap-colors':
+                    activateSwapColors(player);
+                    break;
+                case 'wildcard':
+                    activateWildcard(player);
+                    break;
+                default:
+                    alert('Booster non implémenté: ' + booster.name);
+            }
             
             renderBoosters();
+        }
+        
+        // ===== IMPLÉMENTATION DES BOOSTERS =====
+        
+        // 1. Double Coup - Jouer deux fois d'affilée
+        function activateDoubleShot(player) {
+            // Envoyer au serveur pour activer le double coup
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
+            
+            var fields = {
+                'action': 'double-shot',
+                'player': player
+            };
+            
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
+            console.log('[Booster] Double Coup activé pour', player);
+            form.submit();
+        }
+        
+        // 2. Effaceur - Retirer un pion adverse
+        function activateRemovePiece(player) {
+            activeBooster = {
+                type: 'remove-piece',
+                player: player,
+                opponentColor: player === 'R' ? 'Y' : 'R'
+            };
+            alert('🗑️ Effaceur activé!\n\nCliquez sur un pion adverse pour le retirer du plateau.');
+            highlightOpponentPieces(activeBooster.opponentColor);
+            console.log('[Booster] Effaceur activé pour', player);
+        }
+        
+        // 3. Bloqueur - Bloquer une colonne
+        function activateBlockColumn(player) {
+            activeBooster = {
+                type: 'block-column',
+                player: player
+            };
+            alert('🚫 Bloqueur activé!\n\nCliquez sur un bouton de colonne pour la bloquer pendant le prochain tour de l\'adversaire.');
+            highlightColumnButtons();
+            console.log('[Booster] Bloqueur activé pour', player);
+        }
+        
+        // 4. Échange - Échanger deux pions
+        var swapFirstPiece = null;
+        function activateSwapColors(player) {
+            activeBooster = {
+                type: 'swap-colors',
+                player: player
+            };
+            swapFirstPiece = null;
+            alert('🔄 Échange activé!\n\nCliquez sur deux pions pour échanger leurs positions.');
+            highlightAllPieces();
+            console.log('[Booster] Échange activé pour', player);
+        }
+        
+        // 5. Joker - Placer un pion n'importe où
+        function activateWildcard(player) {
+            activeBooster = {
+                type: 'wildcard',
+                player: player
+            };
+            alert('🌟 Joker activé!\n\nCliquez directement sur une case vide du plateau pour y placer votre pion.');
+            highlightEmptyCells();
+            console.log('[Booster] Joker activé pour', player);
+        }
+        
+        // ===== FONCTIONS UTILITAIRES =====
+        
+        function highlightOpponentPieces(color) {
+            var cells = document.querySelectorAll('td[data-color="' + color + '"]');
+            cells.forEach(function(cell) {
+                cell.style.cursor = 'pointer';
+                cell.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.8)';
+                cell.classList.add('booster-target');
+            });
+        }
+        
+        function highlightColumnButtons() {
+            var buttons = document.querySelectorAll('.col-button');
+            buttons.forEach(function(btn) {
+                btn.style.boxShadow = '0 0 15px rgba(245, 158, 11, 0.8)';
+                btn.classList.add('booster-target');
+            });
+        }
+        
+        function highlightAllPieces() {
+            var cells = document.querySelectorAll('td[data-color]');
+            cells.forEach(function(cell) {
+                if(cell.getAttribute('data-color')) {
+                    cell.style.cursor = 'pointer';
+                    cell.style.boxShadow = '0 0 15px rgba(59, 130, 246, 0.8)';
+                    cell.classList.add('booster-target');
+                }
+            });
+        }
+        
+        function highlightEmptyCells() {
+            var cells = document.querySelectorAll('td:not([data-color])');
+            cells.forEach(function(cell) {
+                cell.style.cursor = 'pointer';
+                cell.style.boxShadow = '0 0 15px rgba(34, 197, 94, 0.8)';
+                cell.classList.add('booster-target');
+            });
+        }
+        
+        function removeAllHighlights() {
+            var targets = document.querySelectorAll('.booster-target');
+            targets.forEach(function(el) {
+                el.style.cursor = '';
+                el.style.boxShadow = '';
+                el.classList.remove('booster-target');
+            });
+        }
+        
+        function cancelActiveBooster() {
+            activeBooster = null;
+            swapFirstPiece = null;
+            removeAllHighlights();
+        }
+        
+        // ===== GESTION DES CLICS SUR LE PLATEAU =====
+        
+        // Initialiser les événements de clic sur le plateau en mode turbo
+        if(gameMode === 'turbo') {
+            // Nombre de colonnes depuis le serveur
+            var boardCols = {{.Cols}};
+            
+            // Ajouter data-color aux cellules existantes
+            var allCells = document.querySelectorAll('td');
+            allCells.forEach(function(td, index) {
+                var span = td.querySelector('.cell');
+                if(span) {
+                    if(span.classList.contains('R')) {
+                        td.setAttribute('data-color', 'R');
+                    } else if(span.classList.contains('Y')) {
+                        td.setAttribute('data-color', 'Y');
+                    }
+                    
+                    // Ajouter position row/col
+                    var row = Math.floor(index / boardCols);
+                    var col = index % boardCols;
+                    td.setAttribute('data-row', row);
+                    td.setAttribute('data-col', col);
+                }
+            });
+            
+            // Gestionnaire de clic sur les cellules
+            document.querySelector('.board tbody').addEventListener('click', function(e) {
+                if(!activeBooster) return;
+                
+                var td = e.target.closest('td');
+                if(!td) return;
+                
+                var row = parseInt(td.getAttribute('data-row'));
+                var col = parseInt(td.getAttribute('data-col'));
+                var color = td.getAttribute('data-color');
+                
+                switch(activeBooster.type) {
+                    case 'remove-piece':
+                        if(color === activeBooster.opponentColor) {
+                            handleRemovePiece(td, row, col);
+                        }
+                        break;
+                    case 'swap-colors':
+                        if(color) {
+                            handleSwapPieces(td, row, col, color);
+                        }
+                        break;
+                    case 'wildcard':
+                        if(!color) {
+                            handleWildcard(td, row, col);
+                        }
+                        break;
+                }
+            });
+            
+            // Gestionnaire de clic sur les boutons de colonnes
+            document.querySelector('.board thead').addEventListener('click', function(e) {
+                if(!activeBooster || activeBooster.type !== 'block-column') return;
+                
+                var btn = e.target.closest('.col-button');
+                if(!btn) return;
+                
+                e.preventDefault();
+                e.stopPropagation();
+                
+                var col = parseInt(btn.getAttribute('data-column'));
+                handleBlockColumn(btn, col);
+            });
+        }
+        
+        // Gérer l'effacement d'un pion
+        function handleRemovePiece(td, row, col) {
+            console.log('[Booster] Retrait du pion en', row, col);
+            
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
+            
+            var fields = {
+                'action': 'remove-piece',
+                'player': activeBooster.player,
+                'row': row,
+                'col': col
+            };
+            
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            cancelActiveBooster();
+            form.submit();
+        }
+        
+        // Gérer l'échange de deux pions
+        function handleSwapPieces(td, row, col, color) {
+            if(!swapFirstPiece) {
+                // Premier pion sélectionné
+                swapFirstPiece = { td: td, row: row, col: col, color: color };
+                td.style.border = '3px solid #3b82f6';
+                console.log('[Booster] Premier pion sélectionné:', row, col, color);
+            } else {
+                // Deuxième pion sélectionné - échanger
+                console.log('[Booster] Échange entre', swapFirstPiece.row, swapFirstPiece.col, 'et', row, col);
+                
+                swapFirstPiece.td.style.border = '';
+                
+                // Envoyer au serveur
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/booster-action';
+                
+                var fields = {
+                    'action': 'swap-colors',
+                    'player': activeBooster.player,
+                    'row1': swapFirstPiece.row,
+                    'col1': swapFirstPiece.col,
+                    'row2': row,
+                    'col2': col
+                };
+                
+                for(var key in fields) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = fields[key];
+                    form.appendChild(input);
+                }
+                
+                document.body.appendChild(form);
+                cancelActiveBooster();
+                form.submit();
+            }
+        }
+        
+        // Gérer le placement d'un joker
+        function handleWildcard(td, row, col) {
+            console.log('[Booster] Placement d\'un joker en', row, col);
+            
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
+            
+            var fields = {
+                'action': 'wildcard',
+                'player': activeBooster.player,
+                'row': row,
+                'col': col
+            };
+            
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            cancelActiveBooster();
+            form.submit();
+        }
+        
+        // Gérer le blocage d'une colonne
+        var blockedColumn = null;
+        function handleBlockColumn(btn, col) {
+            console.log('[Booster] Blocage de la colonne', col);
+            
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
+            
+            var fields = {
+                'action': 'block-column',
+                'player': activeBooster.player,
+                'col': col
+            };
+            
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            cancelActiveBooster();
+            form.submit();
+        }
+        
+        // Fonction pour détecter le joueur actif
+        function getCurrentPlayer() {
+            var statusElement = document.getElementById('status');
+            if(!statusElement) return null;
+            
+            var statusText = statusElement.textContent;
+            
+            // Chercher "Au tour de: [Nom] 🔴" ou "Au tour de: [Nom] 🟡"
+            if(statusText.indexOf('🔴') !== -1 && statusText.indexOf('Au tour de') !== -1) {
+                return 'R';
+            } else if(statusText.indexOf('🟡') !== -1 && statusText.indexOf('Au tour de') !== -1) {
+                return 'Y';
+            }
+            
+            return null;
+        }
+        
+        // Fonction pour mettre à jour l'état actif/inactif des panneaux de boosters
+        function updateBoosterPanelsState() {
+            if(gameMode !== 'turbo') return;
+            
+            var currentPlayer = getCurrentPlayer();
+            
+            if(!currentPlayer) {
+                // Partie terminée, désactiver les deux panneaux
+                if(boostersPanelR) boostersPanelR.classList.add('inactive');
+                if(boostersPanelY) boostersPanelY.classList.add('inactive');
+                return;
+            }
+            
+            // Activer le panneau du joueur actif, désactiver l'autre
+            if(currentPlayer === 'R') {
+                if(boostersPanelR) boostersPanelR.classList.remove('inactive');
+                if(boostersPanelY) boostersPanelY.classList.add('inactive');
+            } else {
+                if(boostersPanelR) boostersPanelR.classList.add('inactive');
+                if(boostersPanelY) boostersPanelY.classList.remove('inactive');
+            }
+            
+            console.log('[Boosters] Panneau actif pour joueur:', currentPlayer);
+        }
+        
+        // Mettre à jour l'état des panneaux au chargement et après chaque coup
+        if(gameMode === 'turbo') {
+            updateBoosterPanelsState();
+            
+            // Observer les changements dans le status pour mettre à jour les panneaux
+            var statusElement = document.getElementById('status');
+            if(statusElement && window.MutationObserver) {
+                var observer = new MutationObserver(function() {
+                    updateBoosterPanelsState();
+                });
+                observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
+            }
         }
         
         // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
