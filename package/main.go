@@ -80,43 +80,6 @@ func wsBroadcast(v interface{}) {
 	}
 }
 
-// Broadcast current version to all clients
-func broadcastStateVersion() {
-	mu.Lock()
-	payload := map[string]interface{}{
-		"version":  state.Version,
-		"finished": state.Finished,
-		"winner":   state.Winner,
-		"mode":     state.Mode,
-	}
-	mu.Unlock()
-	wsBroadcast(payload)
-}
-
-// WebSocket handler
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("ws upgrade error: %v", err)
-		return
-	}
-	wsRegister(conn)
-	// Send initial state version
-	mu.Lock()
-	initMsg := map[string]interface{}{"version": state.Version, "mode": state.Mode}
-	mu.Unlock()
-	_ = conn.WriteJSON(initMsg)
-	// Read loop (discard messages); clean up on error
-	go func() {
-		defer wsUnregister(conn)
-		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
-				return
-			}
-		}
-	}()
-}
-
 // getLocalIP retourne l'adresse IP locale de la machine
 // Priorités:
 // 1) IPv4 privée RFC1918 (192.168.x.x, 10.x.x.x, 172.16-31.x.x) sur interface UP non loopback non-virtuelle
@@ -507,8 +470,6 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Incrémenter la version à chaque coup valide
 	state.Version++
-	// notifier les clients temps réel
-	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -530,7 +491,6 @@ func nextLevelHandler(w http.ResponseWriter, r *http.Request) {
 
 	resetBoard()
 	state.Version++
-	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -559,7 +519,6 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 
 	resetBoard()
 	state.Version++
-	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -580,7 +539,6 @@ func restartModeHandler(w http.ResponseWriter, r *http.Request) {
 
 	resetBoard()
 	state.Version++
-	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -624,7 +582,6 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 	state.Finished = false
 	// Changement de mode = nouvelle version
 	state.Version++
-	go broadcastStateVersion()
 
 	// Redirection spéciale pour le mode multijoueur
 	if mode == "multijoueur" {
@@ -777,7 +734,6 @@ func main() {
 	http.HandleFunc("/menu", menuHandler)
 	http.HandleFunc("/multiplayer", multiplayerHandler)
 	http.HandleFunc("/game", indexHandler)
-	http.HandleFunc("/ws", wsHandler)
 	http.HandleFunc("/state", stateHandler)
 	http.HandleFunc("/api/info", infoHandler)
 	http.HandleFunc("/play", formPlayHandler)
