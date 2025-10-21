@@ -339,6 +339,10 @@
 <body class="mode-{{.Mode}}">
     <div class="game-container">
         <h1>Puissance 4</h1>
+        <!-- Affichage de l'équipe du joueur -->
+        <div id="player-team-indicator" style="text-align:center;padding:8px;margin-bottom:10px;background:#1e293b;border-radius:8px;font-weight:bold;display:none;">
+            <span id="player-team-text"></span>
+        </div>
         <div class="info">
         <div id="status">
             {{if .Finished}}
@@ -448,9 +452,31 @@
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
-        // Détecter le mode de jeu
+        // Détecter le mode de jeu et l'équipe du joueur
         var gameMode = document.body.className.replace('mode-', '');
+        var urlParams = new URLSearchParams(window.location.search);
+        var playerTeam = urlParams.get('team'); // 'R' ou 'Y'
+        
         console.log('[Mode] Mode de jeu actuel:', gameMode);
+        console.log('[Team] Équipe du joueur:', playerTeam);
+        
+        // Afficher l'équipe du joueur si définie
+        if(playerTeam) {
+            var indicator = document.getElementById('player-team-indicator');
+            var teamText = document.getElementById('player-team-text');
+            if(indicator && teamText) {
+                if(playerTeam === 'R') {
+                    teamText.textContent = '🔴 Tu joues Rouge';
+                    indicator.style.backgroundColor = '#7f1d1d';
+                    indicator.style.color = '#fecaca';
+                } else if(playerTeam === 'Y') {
+                    teamText.textContent = '🟡 Tu joues Jaune';
+                    indicator.style.backgroundColor = '#713f12';
+                    indicator.style.color = '#fef3c7';
+                }
+                indicator.style.display = 'block';
+            }
+        }
         
         // Fonction helper pour vérifier si on est en mode turbo
         function isTurboMode() {
@@ -482,32 +508,104 @@
             setTimeout(poll, 800);
         })();
 
-        // WebSocket temps réel (si dispo). Préfère WS et fallback sur polling.
+        // WebSocket temps réel pour parties avec code
+        var gameWebSocket = null; // Variable globale pour le WebSocket
+        
         (function(){
-            if(gameMode !== 'multijoueur') return;
+            // Récupérer le code de la partie depuis l'URL
+            var urlParams = new URLSearchParams(window.location.search);
+            var partyCode = urlParams.get('code');
+            var playerTeam = urlParams.get('team'); // Récupérer l'équipe du joueur
+            
+            if(!partyCode) return; // Pas de code = pas de WebSocket
+            
             var supported = 'WebSocket' in window || 'MozWebSocket' in window;
-            if(!supported) return; // polling fera le boulot
+            if(!supported) return;
+            
             try {
                 var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-                var ws = new WebSocket(proto + '://' + location.host + '/ws');
-                var initial = parseInt((document.querySelector('meta[name="game-version"]')||{}).content||'0',10);
-                var last = isNaN(initial) ? null : initial;
-                ws.onmessage = function(evt){
+                // Inclure l'équipe dans l'URL du WebSocket
+                var wsUrl = proto + '://' + location.host + '/ws/' + partyCode;
+                if(playerTeam) {
+                    wsUrl += '?team=' + playerTeam;
+                }
+                gameWebSocket = new WebSocket(wsUrl);
+                var lastVersion = null; // Suivre la version pour éviter les rechargements inutiles
+                
+                gameWebSocket.onopen = function() {
+                    console.log('[WS] Connecté à la partie', partyCode, 'équipe:', playerTeam);
+                };
+                
+                gameWebSocket.onmessage = function(evt){
                     try{
                         var data = JSON.parse(evt.data);
-                        if(typeof data.version === 'number'){
-                            if(last === null){ last = data.version; }
-                            else if(data.version !== last){
-                                console.log('[WS] Version changée => reload');
-                                location.reload();
-                            }
+                        
+                        // Gérer les messages d'erreur du serveur
+                        if(data.type === 'error') {
+                            console.error('[WS] Erreur:', data.message);
+                            alert(data.message);
+                            return;
                         }
-                    }catch(e){ console.warn('WS parse', e); }
+                        
+                        console.log('[WS] Mise à jour reçue, version:', data.version);
+                        
+                        // Initialiser la version au premier message
+                        if(lastVersion === null) {
+                            lastVersion = data.version;
+                            console.log('[WS] Version initiale:', lastVersion);
+                            return; // Ne pas recharger au premier message
+                        }
+                        
+                        // Recharger seulement si la version a changé
+                        if(data.version !== lastVersion) {
+                            console.log('[WS] Version changée de', lastVersion, 'à', data.version, '=> reload');
+                            location.reload();
+                        }
+                    }catch(e){ 
+                        console.warn('WS parse', e); 
+                    }
                 };
-                ws.onclose = function(){ console.warn('[WS] Fermé, fallback polling actif'); };
+                
+                gameWebSocket.onclose = function(){ 
+                    console.warn('[WS] Connexion fermée pour la partie', partyCode); 
+                };
+                
+                gameWebSocket.onerror = function(err){
+                    console.error('[WS] Erreur:', err);
+                };
             } catch(e) {
                 console.warn('[WS] Erreur init', e);
             }
+        })();
+        
+        // Intercepter le formulaire de jeu pour envoyer via WebSocket au lieu de POST
+        (function(){
+            var playForm = document.getElementById('playForm');
+            if(!playForm) return;
+            
+            playForm.addEventListener('submit', function(e) {
+                e.preventDefault(); // Empêcher le POST classique
+                
+                var columnInput = playForm.querySelector('input[name="column"]');
+                if(!columnInput || !columnInput.value) {
+                    console.warn('[Play] Pas de colonne sélectionnée');
+                    return;
+                }
+                
+                var col = parseInt(columnInput.value);
+                console.log('[Play] Envoi du coup via WebSocket, colonne:', col);
+                
+                // Envoyer le coup via WebSocket
+                if(gameWebSocket && gameWebSocket.readyState === WebSocket.OPEN) {
+                    gameWebSocket.send(JSON.stringify({
+                        type: 'play',
+                        col: col
+                    }));
+                    console.log('[Play] Coup envoyé');
+                } else {
+                    console.error('[Play] WebSocket non connecté');
+                }
+            });
         })();
         
         // Gestion des boosters (mode Turbo uniquement)

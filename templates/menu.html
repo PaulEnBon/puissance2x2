@@ -33,62 +33,60 @@
     <h1>Choisir un mode de jeu</h1>
     <p>Sélectionnez votre catégorie et votre mode de jeu préféré</p>
     
-    <form method="post" action="/set-mode">
-      <div class="categories">
-        <!-- Catégorie Solo -->
-        <div class="category">
-          <h2>🎮 Solo</h2>
-          <div class="modes">
-            <div class="mode">
-              <h3>📈 Exponentiel</h3>
-              <small>Plateau évolutif : 4, puis 5, puis 6 alignés... La grille grandit !</small>
-              <button type="submit" name="mode" value="solo-exponentiel">Jouer</button>
-            </div>
-            <div class="mode">
-              <h3>🎯 Classique</h3>
-              <small>Puissance 4 traditionnel : grille 6×7, 4 pions alignés</small>
-              <button type="submit" name="mode" value="solo-classique">Jouer</button>
-            </div>
-            <div class="mode">
-              <h3>⚡ Turbo</h3>
-              <small>Mode avec boosters et pouvoirs spéciaux !</small>
-              <button type="submit" name="mode" value="solo-turbo">Jouer</button>
-            </div>
+    <div class="categories">
+      <!-- Catégorie Solo -->
+      <div class="category">
+        <h2>🎮 Solo</h2>
+        <div class="modes">
+          <div class="mode">
+            <h3>📈 Exponentiel</h3>
+            <small>Plateau évolutif : 4, puis 5, puis 6 alignés... La grille grandit !</small>
+            <button type="button" onclick="createSoloParty('solo-exponentiel')">Jouer</button>
           </div>
-        </div>
-
-        <!-- Catégorie Multi -->
-        <div class="category">
-          <h2>👥 Multijoueur</h2>
-          <div class="modes">
-            <div class="mode">
-              <h3>📈 Exponentiel</h3>
-              <small>Plateau évolutif en ligne avec des amis</small>
-              <button type="submit" name="mode" value="multi-exponentiel">Jouer</button>
-            </div>
-            <div class="mode">
-              <h3>🎯 Classique</h3>
-              <small>Puissance 4 traditionnel en multijoueur</small>
-              <button type="submit" name="mode" value="multi-classique">Jouer</button>
-            </div>
-            <div class="mode">
-              <h3>⚡ Turbo</h3>
-              <small>Mode turbo avec boosters en ligne !</small>
-              <button type="submit" name="mode" value="multi-turbo">Jouer</button>
-            </div>
+          <div class="mode">
+            <h3>🎯 Classique</h3>
+            <small>Puissance 4 traditionnel : grille 6×7, 4 pions alignés</small>
+            <button type="button" onclick="createSoloParty('solo-classique')">Jouer</button>
           </div>
-
-          <!-- 👇 Nouvelle section : parties personnalisées -->
-          <div class="custom-party">
-            <h3>🎮 Parties personnalisées</h3>
-            <small>Crée ou rejoins une partie avec un code unique</small>
-            <button type="button" onclick="createParty()">Créer une partie</button>
-            <button type="button" onclick="joinParty()">Rejoindre une partie</button>
-            <p id="party-code"></p>
+          <div class="mode">
+            <h3>⚡ Turbo</h3>
+            <small>Mode avec boosters et pouvoirs spéciaux !</small>
+            <button type="button" onclick="createSoloParty('solo-turbo')">Jouer</button>
           </div>
         </div>
       </div>
-    </form>
+
+      <!-- Catégorie Multi -->
+      <div class="category">
+        <h2>👥 Multijoueur</h2>
+        <div class="modes">
+          <div class="mode">
+            <h3>📈 Exponentiel</h3>
+            <small>Plateau évolutif en ligne avec des amis</small>
+            <button type="button" onclick="createParty('multi-exponentiel')">Jouer</button>
+          </div>
+          <div class="mode">
+            <h3>🎯 Classique</h3>
+            <small>Puissance 4 traditionnel en multijoueur</small>
+            <button type="button" onclick="createParty('multi-classique')">Jouer</button>
+          </div>
+          <div class="mode">
+            <h3>⚡ Turbo</h3>
+            <small>Mode turbo avec boosters en ligne !</small>
+            <button type="button" onclick="createParty('multi-turbo')">Jouer</button>
+          </div>
+        </div>
+
+        <!-- 👇 Nouvelle section : parties personnalisées -->
+        <div class="custom-party">
+          <h3>🎮 Parties personnalisées</h3>
+          <small>Crée ou rejoins une partie avec un code unique</small>
+          <button type="button" onclick="createParty()">Créer une partie</button>
+          <button type="button" onclick="joinParty()">Rejoindre une partie</button>
+          <p id="party-code"></p>
+        </div>
+      </div>
+    </div>
 
     <div class="actions">
       <a class="button" href="/">← Retour à l'accueil</a>
@@ -96,22 +94,31 @@
   </div>
   
   <script>
-    // Réinitialiser le compte de clics quand on choisit un mode de jeu
-    const modeForm = document.querySelector('form[action="/set-mode"]');
-    if(modeForm) {
-      modeForm.addEventListener('submit', function(e) {
-        localStorage.setItem('compteClics', '0');
-        console.log('[Menu] Compte de clics réinitialisé à 0');
-      });
+    // Créer une partie solo (sans afficher le code)
+    async function createSoloParty(mode) {
+      const res = await fetch("/api/party/create?mode=" + mode, { method: "POST" });
+      const data = await res.json();
+      console.log("Partie solo créée avec le code:", data.code, "mode:", mode);
+      // Aller directement à la partie sans afficher le code
+      window.location.href = "/game?code=" + data.code;
     }
 
-    // Gestion des parties personnalisées
-    async function createParty() {
-      const res = await fetch("/api/party/create", { method: "POST" });
+    // Créer une partie multijoueur (avec affichage du code)
+    async function createParty(mode) {
+      const res = await fetch("/api/party/create?mode=" + mode, { method: "POST" });
       const data = await res.json();
       document.getElementById("party-code").textContent = "Code de la partie : " + data.code;
-      alert("🎮 Partie créée ! Code : " + data.code + "\nEnvoie ce code à ton ami.");
-      connectToParty(data.code);
+      
+      // Demander de choisir l'équipe
+      const team = prompt("Choisir ton équipe :\nTape 'R' pour Rouge 🔴\nTape 'Y' pour Jaune 🟡")?.toUpperCase();
+      if (!team || (team !== 'R' && team !== 'Y')) {
+        alert("❌ Équipe invalide ! Par défaut: Rouge 🔴");
+        connectToParty(data.code, 'R');
+        return;
+      }
+      
+      alert("🎮 Partie créée ! Code : " + data.code + "\nTu es " + (team === 'R' ? 'Rouge 🔴' : 'Jaune 🟡') + "\nPartage ce code avec ton ami.");
+      connectToParty(data.code, team);
     }
 
     async function joinParty() {
@@ -119,23 +126,23 @@
       if (!code) return;
       const res = await fetch("/api/party/join?code=" + code, { method: "POST" });
       if (res.ok) {
-        alert("✅ Tu as rejoint la partie " + code);
-        connectToParty(code);
+        // Demander de choisir l'équipe
+        const team = prompt("Choisir ton équipe :\nTape 'R' pour Rouge 🔴\nTape 'Y' pour Jaune 🟡")?.toUpperCase();
+        if (!team || (team !== 'R' && team !== 'Y')) {
+          alert("❌ Équipe invalide ! Choisir R ou Y");
+          return;
+        }
+        alert("✅ Tu as rejoint la partie " + code + " en tant que " + (team === 'R' ? 'Rouge 🔴' : 'Jaune 🟡'));
+        connectToParty(code, team);
       } else {
         alert("❌ Code invalide !");
       }
     }
 
-    function connectToParty(code) {
-      const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(wsProto + "//" + location.host + "/ws/" + code);
-      ws.onopen = () => console.log("Connecté à la partie", code);
-      ws.onmessage = (e) => {
-        const state = JSON.parse(e.data);
-        console.log("État de la partie :", state);
-        // TODO : afficher le plateau avec les données reçues (intégration future)
-      };
-      ws.onclose = () => console.log("Connexion fermée pour", code);
+    function connectToParty(code, team) {
+      // Rediriger vers la page de jeu avec le code et l'équipe choisie
+      const url = "/game?code=" + code + (team ? "&team=" + team : "");
+      window.location.href = url;
     }
   </script>
 </body>

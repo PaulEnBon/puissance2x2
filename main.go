@@ -72,11 +72,12 @@ var (
 // ---------------- PARTIES AVEC CODES UNIQUES ----------------
 
 type Party struct {
-	Code      string
-	CreatedAt time.Time
-	State     game.GameState
-	Clients   map[*websocket.Conn]bool
-	Mu        sync.Mutex
+	Code       string
+	CreatedAt  time.Time
+	State      game.GameState
+	Clients    map[*websocket.Conn]bool
+	ClientTeam map[*websocket.Conn]string // Stocke l'équipe de chaque client ('R' ou 'Y')
+	Mu         sync.Mutex
 }
 
 var (
@@ -97,20 +98,27 @@ func createPartyHandler(w http.ResponseWriter, r *http.Request) {
 	partiesMu.Lock()
 	defer partiesMu.Unlock()
 
+	// Récupérer le mode depuis l'URL
+	mode := r.URL.Query().Get("mode")
+	if mode == "" {
+		mode = "solo-classique" // Mode par défaut
+	}
+
 	code := generateCode()
 	newState := game.GameState{
 		Rows: 6, Cols: 7, WinLength: 4,
-		Next: "R", Mode: "custom",
+		Next: "R", Mode: mode,
 	}
 	p := &Party{
-		Code:      code,
-		CreatedAt: time.Now(),
-		State:     newState,
-		Clients:   make(map[*websocket.Conn]bool),
+		Code:       code,
+		CreatedAt:  time.Now(),
+		State:      newState,
+		Clients:    make(map[*websocket.Conn]bool),
+		ClientTeam: make(map[*websocket.Conn]string),
 	}
 	parties[code] = p
 
-	log.Printf("✅ Nouvelle partie créée : %s", code)
+	log.Printf("✅ Nouvelle partie créée : %s (mode: %s)", code, mode)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"code": code})
 }
@@ -139,6 +147,12 @@ func wsPartyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Récupérer l'équipe depuis l'URL (query param)
+	team := r.URL.Query().Get("team")
+	if team == "" {
+		team = "R" // Par défaut équipe rouge
+	}
+
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -147,6 +161,7 @@ func wsPartyHandler(w http.ResponseWriter, r *http.Request) {
 
 	p.Mu.Lock()
 	p.Clients[conn] = true
+	p.ClientTeam[conn] = team // Stocker l'équipe du client
 	p.Mu.Unlock()
 
 	_ = conn.WriteJSON(p.State)
@@ -155,6 +170,7 @@ func wsPartyHandler(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			p.Mu.Lock()
 			delete(p.Clients, conn)
+			delete(p.ClientTeam, conn)
 			p.Mu.Unlock()
 			conn.Close()
 		}()
@@ -166,15 +182,27 @@ func wsPartyHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if msg["type"] == "play" {
 				col := int(msg["col"].(float64))
-				handlePartyMove(p, col)
+				handlePartyMove(p, conn, col)
 			}
 		}
 	}()
 }
 
-func handlePartyMove(p *Party, col int) {
+func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 	p.Mu.Lock()
 	defer p.Mu.Unlock()
+
+	// Vérifier que c'est bien le tour du joueur qui fait le mouvement
+	playerTeam := p.ClientTeam[conn]
+	if playerTeam != p.State.Next {
+		// Envoyer un message d'erreur au client
+		errorMsg := map[string]interface{}{
+			"type":    "error",
+			"message": "Ce n'est pas votre tour!",
+		}
+		_ = conn.WriteJSON(errorMsg)
+		return
+	}
 
 	if p.State.Finished || col < 0 || col >= p.State.Cols {
 		return
@@ -237,6 +265,45 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func gameHandler(w http.ResponseWriter, r *http.Request) {
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Redirect(w, r, "/menu", http.StatusSeeOther)
+		return
+	}
+
+	partiesMu.Lock()
+	p, exists := parties[code]
+	partiesMu.Unlock()
+
+	if !exists {
+		http.Redirect(w, r, "/menu", http.StatusSeeOther)
+		return
+	}
+
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
+
+	data := struct {
+		game.GameState
+		Player1Name   string
+		Player2Name   string
+		BlockedColumn int
+		Code          string
+	}{
+		GameState:     p.State,
+		Player1Name:   playerNames[0],
+		Player2Name:   playerNames[1],
+		BlockedColumn: -1,
+		Code:          code,
+	}
+
+	if err := indexTmpl.Execute(w, data); err != nil {
+		log.Printf("template execute error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
 // ---------------- MAIN ----------------
 
 func main() {
@@ -246,6 +313,7 @@ func main() {
 	http.HandleFunc("/players", playersHandler)
 	http.HandleFunc("/set-players", setPlayersHandler)
 	http.HandleFunc("/menu", menuHandler)
+	http.HandleFunc("/game", gameHandler)
 	http.HandleFunc("/api/party/create", createPartyHandler)
 	http.HandleFunc("/api/party/join", joinPartyHandler)
 	http.HandleFunc("/ws/", wsPartyHandler)
