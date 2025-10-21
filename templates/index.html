@@ -175,6 +175,139 @@
                 transform: translate(-50%, -50%) scale(0.5);
             }
         }
+        
+        /* Boosters Panel */
+        .boosters-panel {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(17, 24, 39, 0.95);
+            border: 2px solid #3b82f6;
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 250px;
+            max-width: 300px;
+            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+            z-index: 100;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Positionner le panneau du joueur 1 à gauche */
+        .boosters-panel.boosters-player1 {
+            left: 20px;
+            border-color: #ef4444;
+            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.3);
+        }
+        
+        .boosters-panel.boosters-player1 h2 {
+            color: #f87171;
+            border-bottom-color: #ef4444;
+        }
+        
+        /* Positionner le panneau du joueur 2 à droite */
+        .boosters-panel.boosters-player2 {
+            right: 20px;
+            left: auto;
+            border-color: #f59e0b;
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3);
+        }
+        
+        .boosters-panel.boosters-player2 h2 {
+            color: #fbbf24;
+            border-bottom-color: #f59e0b;
+        }
+        
+        .boosters-panel h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.3rem;
+            text-align: center;
+            padding-bottom: 10px;
+        }
+        
+        .boosters-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .booster-card {
+            background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
+            border: 2px solid #60a5fa;
+            border-radius: 12px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: boosterAppear 0.5s ease-out;
+        }
+        
+        .booster-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 20px rgba(96, 165, 250, 0.5);
+            border-color: #93c5fd;
+        }
+        
+        .booster-card.used {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+            border-color: #4b5563;
+        }
+        
+        .booster-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        
+        .booster-icon {
+            font-size: 1.8rem;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+        
+        .booster-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        
+        .booster-description {
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            line-height: 1.4;
+        }
+        
+        .no-boosters {
+            text-align: center;
+            color: #94a3b8;
+            padding: 20px 10px;
+        }
+        
+        .no-boosters p {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+        }
+        
+        .no-boosters small {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+        
+        @keyframes boosterAppear {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Hide boosters panel in non-turbo modes */
+        body:not(.mode-turbo) .boosters-panel {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="mode-{{.Mode}}">
@@ -255,6 +388,30 @@
         </div>
     </div>
     
+    <!-- Boosters Panel Player 1 (visible only in turbo mode) -->
+    <div class="boosters-panel boosters-player1" id="boostersPanelR" style="display: none;">
+        <h2>⚡ {{.Player1Name}} 🔴</h2>
+        <div class="boosters-list" id="boostersListR">
+            <!-- Les boosters du joueur 1 seront ajoutés dynamiquement ici -->
+            <div class="no-boosters" id="noBoostersR">
+                <p>Aucun booster</p>
+                <small>En attente...</small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Boosters Panel Player 2 (visible only in turbo mode) -->
+    <div class="boosters-panel boosters-player2" id="boostersPanelY" style="display: none;">
+        <h2>⚡ {{.Player2Name}} 🟡</h2>
+        <div class="boosters-list" id="boostersListY">
+            <!-- Les boosters du joueur 2 seront ajoutés dynamiquement ici -->
+            <div class="no-boosters" id="noBoostersY">
+                <p>Aucun booster</p>
+                <small>En attente...</small>
+            </div>
+        </div>
+    </div>
+    
     <!-- Particles.js container for animated background -->
     <div id="particles-js"></div>
     
@@ -264,6 +421,156 @@
         // Détecter le mode de jeu
         var gameMode = document.body.className.replace('mode-', '');
         console.log('[Mode] Mode de jeu actuel:', gameMode);
+        
+        // Gestion des boosters (mode Turbo uniquement)
+        var boostersR = []; // Boosters du joueur 1 (Rouge)
+        var boostersY = []; // Boosters du joueur 2 (Jaune)
+        var boostersPanelR = document.getElementById('boostersPanelR');
+        var boostersPanelY = document.getElementById('boostersPanelY');
+        var boostersListR = document.getElementById('boostersListR');
+        var boostersListY = document.getElementById('boostersListY');
+        var noBoostersR = document.getElementById('noBoostersR');
+        var noBoostersY = document.getElementById('noBoostersY');
+        
+        // Afficher les panneaux des boosters en mode turbo
+        if(gameMode === 'turbo') {
+            if(boostersPanelR) boostersPanelR.style.display = 'block';
+            if(boostersPanelY) boostersPanelY.style.display = 'block';
+            console.log('[Boosters] Panneaux activés en mode Turbo');
+        }
+        
+        // Définition des types de boosters disponibles
+        var boosterTypes = {
+            'double-shot': {
+                name: '⚡ Double Coup',
+                description: 'Jouez deux fois d\'affilée',
+                icon: '⚡'
+            },
+            'remove-piece': {
+                name: '🗑️ Effaceur',
+                description: 'Retirez un pion adverse du plateau',
+                icon: '🗑️'
+            },
+            'block-column': {
+                name: '🚫 Bloqueur',
+                description: 'Bloquez une colonne pendant un tour',
+                icon: '🚫'
+            },
+            'swap-colors': {
+                name: '🔄 Échange',
+                description: 'Échangez la position de deux pions',
+                icon: '🔄'
+            },
+            'wildcard': {
+                name: '🌟 Joker',
+                description: 'Placez un pion n\'importe où sur le plateau',
+                icon: '🌟'
+            }
+        };
+        
+        // Fonction pour ajouter un booster à un joueur spécifique
+        function addBooster(type, player) {
+            if(!boosterTypes[type]) {
+                console.error('[Boosters] Type de booster inconnu:', type);
+                return;
+            }
+            
+            var booster = {
+                id: Date.now() + Math.random(),
+                type: type,
+                player: player, // 'R' ou 'Y'
+                used: false,
+                ...boosterTypes[type]
+            };
+            
+            if(player === 'R') {
+                boostersR.push(booster);
+            } else if(player === 'Y') {
+                boostersY.push(booster);
+            }
+            
+            renderBoosters();
+            console.log('[Boosters] Nouveau booster ajouté pour joueur', player, ':', booster.name);
+        }
+        
+        // Fonction pour afficher les boosters
+        function renderBoosters() {
+            // Rendu des boosters du joueur 1 (Rouge)
+            if(boostersListR) {
+                if(noBoostersR) {
+                    noBoostersR.style.display = boostersR.length === 0 ? 'block' : 'none';
+                }
+                
+                var cardsR = boostersListR.querySelectorAll('.booster-card');
+                cardsR.forEach(card => card.remove());
+                
+                boostersR.forEach(function(booster) {
+                    var card = createBoosterCard(booster);
+                    boostersListR.appendChild(card);
+                });
+            }
+            
+            // Rendu des boosters du joueur 2 (Jaune)
+            if(boostersListY) {
+                if(noBoostersY) {
+                    noBoostersY.style.display = boostersY.length === 0 ? 'block' : 'none';
+                }
+                
+                var cardsY = boostersListY.querySelectorAll('.booster-card');
+                cardsY.forEach(card => card.remove());
+                
+                boostersY.forEach(function(booster) {
+                    var card = createBoosterCard(booster);
+                    boostersListY.appendChild(card);
+                });
+            }
+        }
+        
+        // Fonction pour créer une carte de booster
+        function createBoosterCard(booster) {
+            var card = document.createElement('div');
+            card.className = 'booster-card' + (booster.used ? ' used' : '');
+            card.innerHTML = `
+                <div class="booster-header">
+                    <span class="booster-icon">${booster.icon}</span>
+                    <span class="booster-name">${booster.name}</span>
+                </div>
+                <div class="booster-description">${booster.description}</div>
+            `;
+            
+            if(!booster.used) {
+                card.addEventListener('click', function() {
+                    useBooster(booster.id, booster.player);
+                });
+            }
+            
+            return card;
+        }
+        
+        // Fonction pour utiliser un booster
+        function useBooster(boosterId, player) {
+            var boostersList = player === 'R' ? boostersR : boostersY;
+            var booster = boostersList.find(b => b.id === boosterId);
+            if(!booster || booster.used) return;
+            
+            console.log('[Boosters] Utilisation du booster par joueur', player, ':', booster.name);
+            booster.used = true;
+            
+            // TODO: Implémenter la logique de chaque booster
+            alert('Booster activé par Joueur ' + player + ': ' + booster.name + '\n\n' + booster.description + '\n\n(Fonctionnalité à implémenter)');
+            
+            renderBoosters();
+        }
+        
+        // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
+        if(gameMode === 'turbo') {
+            setTimeout(function() {
+                addBooster('double-shot', 'R');
+                addBooster('remove-piece', 'R');
+                addBooster('block-column', 'Y');
+                addBooster('wildcard', 'Y');
+            }, 1000);
+        }
         
         // Variable pour compter le nombre de clics en jeu (persistante)
         var compte = parseInt(localStorage.getItem('compteClics')) || 0;

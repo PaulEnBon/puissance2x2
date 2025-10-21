@@ -54,6 +54,12 @@ func resetBoard() {
 		state.Cols = 7
 		state.WinLength = 4
 	}
+	// En mode turbo, on garde toujours 6x7 (comme classique pour l'instant)
+	if state.Mode == "turbo" {
+		state.Rows = 6
+		state.Cols = 7
+		state.WinLength = 4
+	}
 
 	// Nettoyer tout le plateau selon les dimensions actuelles
 	for r := 0; r < state.Rows && r < 15; r++ {
@@ -238,7 +244,13 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 		state.Cols = 7
 		log.Printf("Mode exponentiel: réinitialisation complète à Puissance 4 (6×7)")
 	}
-	// En mode classique, on ne change rien (toujours 6×7, 4 alignés)
+	// En mode classique et turbo, on ne change rien (toujours 6×7, 4 alignés)
+	if state.Mode == "turbo" {
+		state.WinLength = 4
+		state.Rows = 6
+		state.Cols = 7
+		log.Printf("Mode turbo: réinitialisation à Puissance 4 (6×7)")
+	}
 
 	resetBoard()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
@@ -280,6 +292,10 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 		state.Mode = "classique"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
 		log.Printf("Mode sélectionné: classique (6×7, 4 alignés)")
+	case "turbo":
+		state.Mode = "turbo"
+		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+		log.Printf("Mode sélectionné: turbo (6×7, 4 alignés + boosters)")
 	default:
 		state.Mode = "exponentiel"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
