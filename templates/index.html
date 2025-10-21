@@ -331,7 +331,7 @@
         }
         
         /* Hide boosters panel in non-turbo modes */
-        body:not(.mode-turbo) .boosters-panel {
+        body:not(.mode-turbo):not(.mode-solo-turbo):not(.mode-multi-turbo) .boosters-panel {
             display: none !important;
         }
     </style>
@@ -364,9 +364,11 @@
                 Clics: <span id="compteValue">0</span>
             </div>
             <form method="post" action="/next-level" style="display:inline">
+                <input type="hidden" name="mode" value="{{.Mode}}">
                 <button id="nextLevel" type="submit">Nouvelle partie</button>
             </form>
             <form method="post" action="/reset" style="display:inline">
+                <input type="hidden" name="mode" value="{{.Mode}}">
                 <button id="reset" type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
             </form>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
@@ -376,6 +378,7 @@
 
     <form method="post" action="/play" id="playForm">
         <input type="hidden" name="column" id="hiddenColumn" value="">
+        <input type="hidden" name="mode" id="hiddenMode" value="{{.Mode}}">
         <table class="board" aria-label="Plateau de jeu">
             <thead>
                 <tr>
@@ -446,14 +449,20 @@
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
         // Détecter le mode de jeu
-    var gameMode = document.body.className.replace('mode-', '');
+        var gameMode = document.body.className.replace('mode-', '');
         console.log('[Mode] Mode de jeu actuel:', gameMode);
+        
+        // Fonction helper pour vérifier si on est en mode turbo
+        function isTurboMode() {
+            return gameMode === 'turbo' || gameMode === 'solo-turbo' || gameMode === 'multi-turbo';
+        }
+        
         // Auto-refresh en mode multijoueur
         (function(){
             if(gameMode !== 'multijoueur') return;
             var lastVersion = null;
             function poll(){
-                fetch('/state', {cache:'no-store'})
+                fetch('/state?mode=multijoueur', {cache:'no-store'})
                 .then(r=>r.json())
                 .then(function(data){
                     if(lastVersion === null){
@@ -512,7 +521,7 @@
         var noBoostersY = document.getElementById('noBoostersY');
         
         // Afficher les panneaux des boosters en mode turbo
-        if(gameMode === 'turbo') {
+        if(isTurboMode()) {
             if(boostersPanelR) boostersPanelR.style.display = 'block';
             if(boostersPanelY) boostersPanelY.style.display = 'block';
             console.log('[Boosters] Panneaux activés en mode Turbo');
@@ -802,9 +811,9 @@
         // ===== GESTION DES CLICS SUR LE PLATEAU =====
         
         // Initialiser les événements de clic sur le plateau en mode turbo
-        if(gameMode === 'turbo') {
+        if(isTurboMode()) {
             // Nombre de colonnes depuis le serveur
-            var boardCols = {{.Cols}};
+            var boardCols = parseInt('{{.Cols}}') || 7;
             
             // Ajouter data-color aux cellules existantes
             var allCells = document.querySelectorAll('td');
@@ -1017,7 +1026,7 @@
         
         // Fonction pour mettre à jour l'état actif/inactif des panneaux de boosters
         function updateBoosterPanelsState() {
-            if(gameMode !== 'turbo') return;
+            if(!isTurboMode()) return;
             
             var currentPlayer = getCurrentPlayer();
             
@@ -1041,7 +1050,7 @@
         }
         
         // Mettre à jour l'état des panneaux au chargement et après chaque coup
-        if(gameMode === 'turbo') {
+        if(isTurboMode()) {
             updateBoosterPanelsState();
             
             // Observer les changements dans le status pour mettre à jour les panneaux
@@ -1055,7 +1064,7 @@
         }
         
         // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
-        if(gameMode === 'turbo') {
+        if(isTurboMode()) {
             setTimeout(function() {
                 addBooster('double-shot', 'R');
                 addBooster('remove-piece', 'R');
