@@ -349,14 +349,10 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 
 // multiplayerHandler affiche la page d'informations multijoueur
 func multiplayerHandler(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
 	data := struct {
 		LocalIP     string
 		Port        string
