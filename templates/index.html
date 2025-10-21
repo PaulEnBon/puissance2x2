@@ -530,6 +530,140 @@
             setTimeout(poll, 800);
         })();
 
+        // ===== DÉFINITIONS GLOBALES DES BOOSTERS (doivent être avant WebSocket) =====
+        
+        var boostersR = []; // Boosters du joueur 1 (Rouge)
+        var boostersY = []; // Boosters du joueur 2 (Jaune)
+        
+        // Définition des types de boosters disponibles
+        var boosterTypes = {
+            'double-shot': {
+                name: '⚡ Double Coup',
+                description: 'Jouez deux fois d\'affilée',
+                icon: '⚡'
+            },
+            'remove-piece': {
+                name: '🗑️ Effaceur',
+                description: 'Retirez un pion adverse du plateau',
+                icon: '🗑️'
+            },
+            'block-column': {
+                name: '🚫 Bloqueur',
+                description: 'Bloquez une colonne pendant un tour',
+                icon: '🚫'
+            },
+            'swap-colors': {
+                name: '🔄 Échange',
+                description: 'Échangez la position de deux pions',
+                icon: '🔄'
+            },
+            'wildcard': {
+                name: '🌟 Joker',
+                description: 'Placez un pion n\'importe où sur le plateau',
+                icon: '🌟'
+            }
+        };
+        
+        // Fonction pour ajouter un booster à un joueur spécifique
+        function addBooster(type, player) {
+            if(!boosterTypes[type]) {
+                console.error('[Boosters] Type de booster inconnu:', type);
+                return;
+            }
+            
+            var booster = {
+                id: Date.now() + Math.random(),
+                type: type,
+                player: player, // 'R' ou 'Y'
+                used: false,
+                name: boosterTypes[type].name,
+                description: boosterTypes[type].description,
+                icon: boosterTypes[type].icon
+            };
+            
+            if(player === 'R') {
+                boostersR.push(booster);
+            } else if(player === 'Y') {
+                boostersY.push(booster);
+            }
+            
+            console.log('[Boosters] Nouveau booster ajouté pour joueur', player, ':', booster.name);
+            
+            // Le rendu se fera plus tard dans le code
+            if(typeof renderBoosters === 'function') {
+                renderBoosters();
+            }
+        }
+
+        // Fonction pour afficher les boosters dans les panneaux
+        function renderBoosters() {
+            var boostersRList = document.getElementById('boostersListR');
+            var boostersYList = document.getElementById('boostersListY');
+            var boostersPanelR = document.getElementById('boostersPanelR');
+            var boostersPanelY = document.getElementById('boostersPanelY');
+            var noBoostersR = document.getElementById('noBoostersR');
+            var noBoostersY = document.getElementById('noBoostersY');
+            
+            if(!boostersRList || !boostersYList) return;
+            
+            // Afficher les panneaux si des boosters existent
+            if(boostersPanelR && boostersR.length > 0) {
+                boostersPanelR.style.display = 'block';
+            }
+            if(boostersPanelY && boostersY.length > 0) {
+                boostersPanelY.style.display = 'block';
+            }
+            
+            // Gérer l'affichage du message "Aucun booster"
+            if(noBoostersR) {
+                noBoostersR.style.display = boostersR.length === 0 ? 'block' : 'none';
+            }
+            if(noBoostersY) {
+                noBoostersY.style.display = boostersY.length === 0 ? 'block' : 'none';
+            }
+            
+            // Supprimer les anciennes cartes (sauf le message "Aucun booster")
+            var oldCardsR = boostersRList.querySelectorAll('.booster-card');
+            oldCardsR.forEach(function(card) { card.remove(); });
+            
+            var oldCardsY = boostersYList.querySelectorAll('.booster-card');
+            oldCardsY.forEach(function(card) { card.remove(); });
+            
+            // Afficher les boosters de R
+            boostersR.forEach(function(booster) {
+                var card = createBoosterCard(booster);
+                boostersRList.appendChild(card);
+            });
+            
+            // Afficher les boosters de Y
+            boostersY.forEach(function(booster) {
+                var card = createBoosterCard(booster);
+                boostersYList.appendChild(card);
+            });
+            
+            console.log('Boosters affichés - R:', boostersR.length, 'Y:', boostersY.length);
+        }
+        
+        function createBoosterCard(booster) {
+            var card = document.createElement('div');
+            card.className = 'booster-card' + (booster.used ? ' used' : '');
+            card.innerHTML = `
+                <div class="booster-header">
+                    <span class="booster-icon">${booster.icon}</span>
+                    <span class="booster-name">${booster.name}</span>
+                </div>
+                <div class="booster-description">${booster.description}</div>
+            `;
+            
+            if(!booster.used) {
+                card.addEventListener('click', function() {
+                    useBooster(booster.id, booster.player);
+                });
+            }
+            
+            return card;
+        }
+
         // WebSocket temps réel pour parties avec code
         var gameWebSocket = null; // Variable globale pour le WebSocket
         
@@ -569,6 +703,37 @@
                             return;
                         }
                         
+                        // Gérer la réponse avec état de jeu
+                        if(data.type === 'state') {
+                            console.log('[WS] Mise à jour état reçue, version:', data.state.version);
+                            
+                            // Vérifier si un booster a été récupéré
+                            if(data.booster && data.player) {
+                                console.log('[Booster] Booster récupéré!', data.booster, 'pour joueur', data.player);
+                                addBooster(data.booster, data.player);
+                                
+                                // Afficher une notification
+                                var boosterName = boosterTypes[data.booster] ? boosterTypes[data.booster].name : data.booster;
+                                var playerName = data.player === 'R' ? '{{.Player1Name}} 🔴' : '{{.Player2Name}} 🟡';
+                                alert('🎉 Booster récupéré!\n\n' + boosterName + '\n\nJoueur: ' + playerName);
+                            }
+                            
+                            // Initialiser la version au premier message
+                            if(lastVersion === null) {
+                                lastVersion = data.state.version;
+                                console.log('[WS] Version initiale:', lastVersion);
+                                return; // Ne pas recharger au premier message
+                            }
+                            
+                            // Recharger seulement si la version a changé
+                            if(data.state.version !== lastVersion) {
+                                console.log('[WS] Version changée de', lastVersion, 'à', data.state.version, '=> reload');
+                                location.reload();
+                            }
+                            return;
+                        }
+                        
+                        // Format ancien (compatibilité)
                         console.log('[WS] Mise à jour reçue, version:', data.version);
                         
                         // Initialiser la version au premier message
@@ -630,9 +795,7 @@
             });
         })();
         
-        // Gestion des boosters (mode Turbo uniquement)
-        var boostersR = []; // Boosters du joueur 1 (Rouge)
-        var boostersY = []; // Boosters du joueur 2 (Jaune)
+        // Gestion des boosters (mode Turbo uniquement) - Panneaux UI
         var boostersPanelR = document.getElementById('boostersPanelR');
         var boostersPanelY = document.getElementById('boostersPanelY');
         var boostersListR = document.getElementById('boostersListR');
@@ -647,8 +810,10 @@
             console.log('[Boosters] Panneaux activés en mode Turbo');
         }
         
-        // Définition des types de boosters disponibles
-        var boosterTypes = {
+        // Note: boosterTypes et addBooster() sont déjà définis plus haut (avant WebSocket)
+        
+        // Supprimer les anciennes définitions dupliquées - début
+        var boosterTypes_OLD = {
             'double-shot': {
                 name: '⚡ Double Coup',
                 description: 'Jouez deux fois d\'affilée',
@@ -675,85 +840,7 @@
                 icon: '🌟'
             }
         };
-        
-        // Fonction pour ajouter un booster à un joueur spécifique
-        function addBooster(type, player) {
-            if(!boosterTypes[type]) {
-                console.error('[Boosters] Type de booster inconnu:', type);
-                return;
-            }
-            
-            var booster = {
-                id: Date.now() + Math.random(),
-                type: type,
-                player: player, // 'R' ou 'Y'
-                used: false,
-                ...boosterTypes[type]
-            };
-            
-            if(player === 'R') {
-                boostersR.push(booster);
-            } else if(player === 'Y') {
-                boostersY.push(booster);
-            }
-            
-            renderBoosters();
-            console.log('[Boosters] Nouveau booster ajouté pour joueur', player, ':', booster.name);
-        }
-        
-        // Fonction pour afficher les boosters
-        function renderBoosters() {
-            // Rendu des boosters du joueur 1 (Rouge)
-            if(boostersListR) {
-                if(noBoostersR) {
-                    noBoostersR.style.display = boostersR.length === 0 ? 'block' : 'none';
-                }
-                
-                var cardsR = boostersListR.querySelectorAll('.booster-card');
-                cardsR.forEach(card => card.remove());
-                
-                boostersR.forEach(function(booster) {
-                    var card = createBoosterCard(booster);
-                    boostersListR.appendChild(card);
-                });
-            }
-            
-            // Rendu des boosters du joueur 2 (Jaune)
-            if(boostersListY) {
-                if(noBoostersY) {
-                    noBoostersY.style.display = boostersY.length === 0 ? 'block' : 'none';
-                }
-                
-                var cardsY = boostersListY.querySelectorAll('.booster-card');
-                cardsY.forEach(card => card.remove());
-                
-                boostersY.forEach(function(booster) {
-                    var card = createBoosterCard(booster);
-                    boostersListY.appendChild(card);
-                });
-            }
-        }
-        
-        // Fonction pour créer une carte de booster
-        function createBoosterCard(booster) {
-            var card = document.createElement('div');
-            card.className = 'booster-card' + (booster.used ? ' used' : '');
-            card.innerHTML = `
-                <div class="booster-header">
-                    <span class="booster-icon">${booster.icon}</span>
-                    <span class="booster-name">${booster.name}</span>
-                </div>
-                <div class="booster-description">${booster.description}</div>
-            `;
-            
-            if(!booster.used) {
-                card.addEventListener('click', function() {
-                    useBooster(booster.id, booster.player);
-                });
-            }
-            
-            return card;
-        }
+        // Supprimer les anciennes définitions dupliquées - fin (fonction addBooster déjà définie plus haut)
         
         // Variables globales pour les boosters actifs
         var activeBooster = null;

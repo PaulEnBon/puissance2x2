@@ -247,10 +247,13 @@ func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 	p.Mu.Lock()
 	defer p.Mu.Unlock()
 
-	// Vérifier que c'est bien le tour du joueur qui fait le mouvement
+	// En mode solo, on autorise les deux joueurs à jouer
+	// En mode multi, on vérifie que c'est bien le tour du joueur
 	playerTeam := p.ClientTeam[conn]
-	if playerTeam != p.State.Next {
-		// Envoyer un message d'erreur au client
+	isSoloMode := strings.Contains(p.State.Mode, "solo")
+
+	if !isSoloMode && playerTeam != "" && playerTeam != p.State.Next {
+		// En mode multijoueur, vérifier que c'est le bon tour
 		errorMsg := map[string]interface{}{
 			"type":    "error",
 			"message": "Ce n'est pas votre tour!",
