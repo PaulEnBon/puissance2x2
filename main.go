@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	mrand "math/rand"
 	"net/http"
@@ -337,6 +340,233 @@ func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 	}
 }
 
+func boosterActionHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Lire le body brut pour debug
+	bodyBytes, _ := io.ReadAll(r.Body)
+	bodyString := string(bodyBytes)
+	log.Printf("[Booster] Body brut reçu: %s", bodyString)
+
+	// Recréer le body pour ParseForm
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// Parser le formulaire
+	if err := r.ParseForm(); err != nil {
+		log.Printf("[Booster] Erreur ParseForm: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Erreur de parsing",
+		})
+		return
+	}
+
+	action := r.FormValue("action")
+	player := r.FormValue("player")
+	code := r.FormValue("code")
+
+	log.Printf("[Booster] Action reçue - action: '%s', player: '%s', code: '%s'", action, player, code)
+	log.Printf("[Booster] Tous les FormValues: %v", r.Form)
+
+	if code == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Code de partie manquant",
+		})
+		return
+	}
+
+	partiesMu.Lock()
+	p, exists := parties[code]
+	partiesMu.Unlock()
+
+	if !exists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Partie introuvable",
+		})
+		return
+	}
+
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
+
+	switch action {
+	case "double-shot":
+		// Activer le double coup pour le joueur
+		p.DoublePlayNext = true
+		log.Printf("[Booster] Double coup activé pour joueur %s dans partie %s", player, code)
+
+		// Notifier tous les clients
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":    "state",
+				"state":   p.State,
+				"message": "Double coup activé!",
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Double coup activé",
+		})
+
+	case "remove-piece":
+		// Retirer un pion
+		rowStr := r.FormValue("row")
+		colStr := r.FormValue("col")
+		log.Printf("[Booster] Retrait de pion à (%s, %s) par joueur %s", rowStr, colStr, player)
+
+		// Convertir et retirer le pion
+		var row, col int
+		fmt.Sscanf(rowStr, "%d", &row)
+		fmt.Sscanf(colStr, "%d", &col)
+
+		if row >= 0 && row < p.State.Rows && col >= 0 && col < p.State.Cols {
+			p.State.Board[row][col] = ""
+			p.State.Version++
+			log.Printf("[Booster] Pion retiré à (%d, %d)", row, col)
+		}
+
+		// Notifier tous les clients
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":  "state",
+				"state": p.State,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Pion retiré",
+		})
+
+	case "block-column":
+		// Bloquer une colonne
+		colStr := r.FormValue("col")
+		log.Printf("[Booster] Blocage de la colonne %s par joueur %s", colStr, player)
+
+		var col int
+		fmt.Sscanf(colStr, "%d", &col)
+
+		p.BlockedColumn = col
+		p.State.Version++
+		log.Printf("[Booster] Colonne %d bloquée", col)
+
+		// Notifier tous les clients
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":    "state",
+				"state":   p.State,
+				"blocked": p.BlockedColumn,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Colonne bloquée",
+		})
+
+	case "swap-colors":
+		// Échanger deux pions
+		row1Str := r.FormValue("row1")
+		col1Str := r.FormValue("col1")
+		row2Str := r.FormValue("row2")
+		col2Str := r.FormValue("col2")
+		log.Printf("[Booster] Échange de pions (%s,%s) <-> (%s,%s) par joueur %s", row1Str, col1Str, row2Str, col2Str, player)
+
+		var row1, col1, row2, col2 int
+		fmt.Sscanf(row1Str, "%d", &row1)
+		fmt.Sscanf(col1Str, "%d", &col1)
+		fmt.Sscanf(row2Str, "%d", &row2)
+		fmt.Sscanf(col2Str, "%d", &col2)
+
+		// Échanger les pions
+		if row1 >= 0 && row1 < p.State.Rows && col1 >= 0 && col1 < p.State.Cols &&
+			row2 >= 0 && row2 < p.State.Rows && col2 >= 0 && col2 < p.State.Cols {
+			p.State.Board[row1][col1], p.State.Board[row2][col2] = p.State.Board[row2][col2], p.State.Board[row1][col1]
+			p.State.Version++
+			log.Printf("[Booster] Pions échangés entre (%d,%d) et (%d,%d)", row1, col1, row2, col2)
+		}
+
+		// Notifier tous les clients
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":  "state",
+				"state": p.State,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Pions échangés",
+		})
+
+	case "wildcard":
+		// Placer un pion n'importe où
+		rowStr := r.FormValue("row")
+		colStr := r.FormValue("col")
+		log.Printf("[Booster] Placement joker à (%s, %s) par joueur %s", rowStr, colStr, player)
+
+		var row, col int
+		fmt.Sscanf(rowStr, "%d", &row)
+		fmt.Sscanf(colStr, "%d", &col)
+
+		// Placer le pion du joueur actuel
+		if row >= 0 && row < p.State.Rows && col >= 0 && col < p.State.Cols && p.State.Board[row][col] == "" {
+			p.State.Board[row][col] = player
+			p.State.Version++
+			log.Printf("[Booster] Joker placé à (%d,%d) pour joueur %s", row, col, player)
+
+			// Vérifier victoire
+			winner := game.WinnerWithLength(p.State.Board, p.State.Rows, p.State.Cols, p.State.WinLength)
+			if winner != "" {
+				p.State.Winner = winner
+				p.State.Finished = true
+				log.Printf("[Booster] Victoire détectée pour joueur %s après joker!", winner)
+			} else {
+				// Changer de joueur
+				if p.State.Next == "R" {
+					p.State.Next = "Y"
+				} else {
+					p.State.Next = "R"
+				}
+			}
+		}
+
+		// Notifier tous les clients
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":  "state",
+				"state": p.State,
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Joker placé",
+		})
+
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Action inconnue",
+		})
+	}
+}
+
 // ---------------- HANDLERS CLASSIQUES (inchangés) ----------------
 
 func welcomeHandler(w http.ResponseWriter, r *http.Request) {
@@ -420,6 +650,7 @@ func main() {
 	http.HandleFunc("/api/party/create", createPartyHandler)
 	http.HandleFunc("/api/party/join", joinPartyHandler)
 	http.HandleFunc("/ws/", wsPartyHandler)
+	http.HandleFunc("/booster-action", boosterActionHandler)
 
 	// Fichiers statiques
 	fs := http.FileServer(http.Dir("templates"))

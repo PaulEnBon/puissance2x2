@@ -532,8 +532,25 @@
 
         // ===== DÉFINITIONS GLOBALES DES BOOSTERS (doivent être avant WebSocket) =====
         
+        // Récupérer le code de la partie pour le localStorage
+        var urlParams = new URLSearchParams(window.location.search);
+        var partyCode = urlParams.get('code');
+        var storageKeyR = 'boosters_R_' + partyCode;
+        var storageKeyY = 'boosters_Y_' + partyCode;
+        
+        // Charger les boosters depuis le localStorage si disponibles
         var boostersR = []; // Boosters du joueur 1 (Rouge)
         var boostersY = []; // Boosters du joueur 2 (Jaune)
+        
+        try {
+            var savedR = localStorage.getItem(storageKeyR);
+            var savedY = localStorage.getItem(storageKeyY);
+            if(savedR) boostersR = JSON.parse(savedR);
+            if(savedY) boostersY = JSON.parse(savedY);
+            console.log('[Storage] Boosters chargés - R:', boostersR.length, 'Y:', boostersY.length);
+        } catch(e) {
+            console.error('[Storage] Erreur chargement boosters:', e);
+        }
         
         // Définition des types de boosters disponibles
         var boosterTypes = {
@@ -583,8 +600,20 @@
             
             if(player === 'R') {
                 boostersR.push(booster);
+                // Sauvegarder dans localStorage
+                try {
+                    localStorage.setItem(storageKeyR, JSON.stringify(boostersR));
+                } catch(e) {
+                    console.error('[Storage] Erreur sauvegarde boosters R:', e);
+                }
             } else if(player === 'Y') {
                 boostersY.push(booster);
+                // Sauvegarder dans localStorage
+                try {
+                    localStorage.setItem(storageKeyY, JSON.stringify(boostersY));
+                } catch(e) {
+                    console.error('[Storage] Erreur sauvegarde boosters Y:', e);
+                }
             }
             
             console.log('[Boosters] Nouveau booster ajouté pour joueur', player, ':', booster.name);
@@ -674,6 +703,11 @@
             var playerTeam = urlParams.get('team'); // Récupérer l'équipe du joueur
             
             if(!partyCode) return; // Pas de code = pas de WebSocket
+            
+            // Afficher les boosters sauvegardés au chargement
+            if(boostersR.length > 0 || boostersY.length > 0) {
+                renderBoosters();
+            }
             
             var supported = 'WebSocket' in window || 'MozWebSocket' in window;
             if(!supported) return;
@@ -862,6 +896,17 @@
             console.log('[Boosters] Utilisation du booster par joueur', player, ':', booster.name);
             booster.used = true;
             
+            // Sauvegarder dans localStorage
+            try {
+                if(player === 'R') {
+                    localStorage.setItem(storageKeyR, JSON.stringify(boostersR));
+                } else {
+                    localStorage.setItem(storageKeyY, JSON.stringify(boostersY));
+                }
+            } catch(e) {
+                console.error('[Storage] Erreur sauvegarde après utilisation:', e);
+            }
+            
             // Exécuter la logique selon le type de booster
             switch(booster.type) {
                 case 'double-shot':
@@ -891,27 +936,48 @@
         // 1. Double Coup - Jouer deux fois d'affilée
         function activateDoubleShot(player) {
             // Envoyer au serveur pour activer le double coup
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/booster-action';
+            console.log('[Booster] URL complète:', window.location.href);
+            console.log('[Booster] Search params:', window.location.search);
             
-            var fields = {
-                'action': 'double-shot',
-                'player': player
-            };
+            var urlParams = new URLSearchParams(window.location.search);
+            var partyCode = urlParams.get('code');
             
-            for(var key in fields) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = fields[key];
-                form.appendChild(input);
+            console.log('[Booster] Activation Double Coup - player:', player, 'code:', partyCode, 'type:', typeof partyCode);
+            
+            // En mode solo (sans code), activer localement
+            if(!partyCode || partyCode === '' || partyCode === 'null') {
+                doublePlayActive = true;
+                alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
+                console.log('[Booster] Double Coup activé en mode solo pour', player);
+                return;
             }
             
-            document.body.appendChild(form);
-            alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
-            console.log('[Booster] Double Coup activé pour', player);
-            form.submit();
+            var bodyData = 'action=double-shot&player=' + encodeURIComponent(player) + '&code=' + encodeURIComponent(partyCode);
+            console.log('[Booster] Envoi requête avec body:', bodyData);
+            
+            // Utiliser fetch pour envoyer la requête sans recharger la page
+            fetch('/booster-action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: bodyData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[Booster] Réponse serveur:', data);
+                if(data.success) {
+                    alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
+                    console.log('[Booster] Double Coup activé pour', player);
+                } else {
+                    console.error('[Booster] Erreur serveur:', data.message);
+                    alert('Erreur: ' + (data.message || 'Action impossible'));
+                }
+            })
+            .catch(error => {
+                console.error('[Booster] Erreur:', error);
+                alert('Erreur lors de l\'activation du booster');
+            });
         }
         
         // 2. Effaceur - Retirer un pion adverse
@@ -962,6 +1028,12 @@
         }
         
         // ===== FONCTIONS UTILITAIRES =====
+        
+        // Fonction pour obtenir le code de partie
+        function getPartyCode() {
+            var urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('code') || '';
+        }
         
         function highlightOpponentPieces(color) {
             var cells = document.querySelectorAll('td[data-color="' + color + '"]');
@@ -1090,29 +1162,33 @@
         function handleRemovePiece(td, row, col) {
             console.log('[Booster] Retrait du pion en', row, col);
             
-            // Envoyer au serveur
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/booster-action';
+            var partyCode = getPartyCode();
+            var bodyData = 'action=remove-piece&player=' + encodeURIComponent(activeBooster.player) + 
+                          '&row=' + row + '&col=' + col + '&code=' + encodeURIComponent(partyCode);
             
-            var fields = {
-                'action': 'remove-piece',
-                'player': activeBooster.player,
-                'row': row,
-                'col': col
-            };
+            fetch('/booster-action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: bodyData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[Booster] Réponse serveur:', data);
+                if(data.success) {
+                    console.log('[Booster] Pion retiré avec succès');
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + (data.message || 'Action impossible'));
+                }
+            })
+            .catch(error => {
+                console.error('[Booster] Erreur:', error);
+                alert('Erreur lors de l\'activation du booster');
+            });
             
-            for(var key in fields) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = fields[key];
-                form.appendChild(input);
-            }
-            
-            document.body.appendChild(form);
             cancelActiveBooster();
-            form.submit();
         }
         
         // Gérer l'échange de deux pions
@@ -1128,31 +1204,34 @@
                 
                 swapFirstPiece.td.style.border = '';
                 
-                // Envoyer au serveur
-                var form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '/booster-action';
+                var partyCode = getPartyCode();
+                var bodyData = 'action=swap-colors&player=' + encodeURIComponent(activeBooster.player) + 
+                              '&row1=' + swapFirstPiece.row + '&col1=' + swapFirstPiece.col +
+                              '&row2=' + row + '&col2=' + col + '&code=' + encodeURIComponent(partyCode);
                 
-                var fields = {
-                    'action': 'swap-colors',
-                    'player': activeBooster.player,
-                    'row1': swapFirstPiece.row,
-                    'col1': swapFirstPiece.col,
-                    'row2': row,
-                    'col2': col
-                };
+                fetch('/booster-action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: bodyData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('[Booster] Réponse serveur:', data);
+                    if(data.success) {
+                        console.log('[Booster] Pions échangés avec succès');
+                        location.reload();
+                    } else {
+                        alert('Erreur: ' + (data.message || 'Action impossible'));
+                    }
+                })
+                .catch(error => {
+                    console.error('[Booster] Erreur:', error);
+                    alert('Erreur lors de l\'activation du booster');
+                });
                 
-                for(var key in fields) {
-                    var input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = key;
-                    input.value = fields[key];
-                    form.appendChild(input);
-                }
-                
-                document.body.appendChild(form);
                 cancelActiveBooster();
-                form.submit();
             }
         }
         
@@ -1160,29 +1239,33 @@
         function handleWildcard(td, row, col) {
             console.log('[Booster] Placement d\'un joker en', row, col);
             
-            // Envoyer au serveur
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/booster-action';
+            var partyCode = getPartyCode();
+            var bodyData = 'action=wildcard&player=' + encodeURIComponent(activeBooster.player) + 
+                          '&row=' + row + '&col=' + col + '&code=' + encodeURIComponent(partyCode);
             
-            var fields = {
-                'action': 'wildcard',
-                'player': activeBooster.player,
-                'row': row,
-                'col': col
-            };
+            fetch('/booster-action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: bodyData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[Booster] Réponse serveur:', data);
+                if(data.success) {
+                    console.log('[Booster] Joker placé avec succès');
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + (data.message || 'Action impossible'));
+                }
+            })
+            .catch(error => {
+                console.error('[Booster] Erreur:', error);
+                alert('Erreur lors de l\'activation du booster');
+            });
             
-            for(var key in fields) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = fields[key];
-                form.appendChild(input);
-            }
-            
-            document.body.appendChild(form);
             cancelActiveBooster();
-            form.submit();
         }
         
         // Gérer le blocage d'une colonne
@@ -1190,28 +1273,33 @@
         function handleBlockColumn(btn, col) {
             console.log('[Booster] Blocage de la colonne', col);
             
-            // Envoyer au serveur
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/booster-action';
+            var partyCode = getPartyCode();
+            var bodyData = 'action=block-column&player=' + encodeURIComponent(activeBooster.player) + 
+                          '&col=' + col + '&code=' + encodeURIComponent(partyCode);
             
-            var fields = {
-                'action': 'block-column',
-                'player': activeBooster.player,
-                'col': col
-            };
+            fetch('/booster-action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: bodyData
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('[Booster] Réponse serveur:', data);
+                if(data.success) {
+                    console.log('[Booster] Colonne bloquée avec succès');
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + (data.message || 'Action impossible'));
+                }
+            })
+            .catch(error => {
+                console.error('[Booster] Erreur:', error);
+                alert('Erreur lors de l\'activation du booster');
+            });
             
-            for(var key in fields) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = fields[key];
-                form.appendChild(input);
-            }
-            
-            document.body.appendChild(form);
             cancelActiveBooster();
-            form.submit();
         }
         
         // Fonction pour détecter le joueur actif
