@@ -9,4 +9,5 @@ type GameState struct {
 	Rows      int            `json:"rows"`
 	Cols      int            `json:"cols"`
 	WinLength int            `json:"winLength"`
+	Version   int            `json:"version"`
 }

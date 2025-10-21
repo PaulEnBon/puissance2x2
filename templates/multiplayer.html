@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Puissance 4 — Multijoueur</title>
+  <link rel="stylesheet" href="/static/font.css" />
+  <style>
+    body{min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#e5e7eb;font-family:system-ui,sans-serif}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.35);width:min(640px,92vw)}
+    h1{margin:0 0 12px 0;font-size:28px;color:#fff;text-align:center}
+    p{margin:0 0 20px 0;text-align:center;color:#cbd5e1}
+    .info-section{background:#0b1220;border:1px solid #1e293b;border-radius:10px;padding:16px;margin:16px 0}
+    .info-section h3{margin:0 0 12px 0;color:#f8fafc;font-size:18px;display:flex;align-items:center;gap:8px}
+    .info-section p{text-align:left;margin:8px 0}
+    .ip-box{background:#1e293b;padding:12px;border-radius:8px;font-family:monospace;font-size:18px;text-align:center;color:#60a5fa;margin:12px 0;border:2px solid #3b82f6}
+    .instructions{list-style:none;padding:0;margin:12px 0}
+    .instructions li{padding:8px 0;border-bottom:1px solid #1e293b;color:#cbd5e1}
+    .instructions li:last-child{border-bottom:none}
+    .instructions li strong{color:#f8fafc}
+    .actions{margin-top:24px;display:flex;gap:12px;justify-content:center}
+    button, a.button{background:#2563eb;color:white;border:none;border-radius:10px;padding:12px 20px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;font-size:16px}
+    button:hover, a.button:hover{background:#1d4ed8}
+    .secondary{background:#0b1220;color:#e2e8f0;border:1px solid #1e293b}
+    .secondary:hover{background:#0f172a}
+    .success{background:#16a34a}
+    .success:hover{background:#15803d}
+    .status-indicator{display:inline-block;width:10px;height:10px;border-radius:50%;background:#16a34a;margin-right:8px;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🌐 Mode Multijoueur</h1>
+    <p>Partagez l'adresse suivante avec vos amis sur le même réseau</p>
+    
+    <div class="info-section">
+      <h3><span class="status-indicator"></span>Serveur actif</h3>
+      <p>Les joueurs sur le même réseau peuvent se connecter à :</p>
+      <div class="ip-box" id="serverAddress">
+        http://{{.LocalIP}}:{{.Port}}
+      </div>
+      <button onclick="copyAddress()" style="width:100%;margin-top:8px">📋 Copier l'adresse</button>
+    </div>
+    
+    <div class="info-section">
+      <h3>📱 Instructions</h3>
+      <ul class="instructions">
+        <li><strong>1.</strong> Partagez l'adresse ci-dessus avec vos amis</li>
+        <li><strong>2.</strong> Assurez-vous d'être sur le même réseau Wi-Fi ou local</li>
+        <li><strong>3.</strong> Vos amis doivent ouvrir l'adresse dans leur navigateur</li>
+        <li><strong>4.</strong> Tous les joueurs verront les mêmes coups en temps réel</li>
+      </ul>
+    </div>
+    
+    <div class="info-section">
+      <h3>ℹ️ Informations</h3>
+      <p style="font-size:14px">
+        <strong>Adresse IP locale :</strong> {{.LocalIP}}<br>
+        <strong>Port :</strong> {{.Port}}<br>
+        <strong>Mode :</strong> Puissance 4 classique (6×7, 4 alignés)<br>
+        <strong>Joueurs :</strong> {{.Player1Name}} vs {{.Player2Name}}
+      </p>
+      <div id="candidatesBox" style="margin-top:10px;display:none">
+        <p style="margin:0 0 6px 0;color:#9ca3af">Autres adresses possibles sur ce PC :</p>
+        <div id="candidatesList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <a class="button success" href="/game">🎮 Commencer à jouer</a>
+      <a class="button secondary" href="/menu">🏠 Retour au menu</a>
+    </div>
+  </div>
+  
+  <script>
+    function copyAddress() {
+      const address = document.getElementById('serverAddress').textContent.trim();
+      navigator.clipboard.writeText(address).then(function() {
+        alert('Adresse copiée : ' + address);
+      }).catch(function(err) {
+        console.error('Erreur de copie:', err);
+        // Fallback pour les navigateurs plus anciens
+        const textArea = document.createElement('textarea');
+        textArea.value = address;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          alert('Adresse copiée : ' + address);
+        } catch(err) {
+          alert('Impossible de copier automatiquement. Copiez manuellement : ' + address);
+        }
+        document.body.removeChild(textArea);
+      });
+    }
+    // Mettre à jour dynamiquement l'adresse si l'IP change (changement de réseau)
+    (function(){
+      var last = null;
+      function renderCandidates(info){
+        var ctn = document.getElementById('candidatesBox');
+        var lst = document.getElementById('candidatesList');
+        if(!ctn || !lst) return;
+        lst.innerHTML='';
+        var list = Array.isArray(info.candidates) ? info.candidates : [];
+        if(list.length === 0){ ctn.style.display='none'; return; }
+        ctn.style.display='block';
+        list.forEach(function(ip){
+          var btn = document.createElement('button');
+          btn.className = 'button secondary';
+          btn.type = 'button';
+          btn.textContent = 'http://' + ip + ':' + info.port;
+          btn.onclick = function(){
+            var box = document.getElementById('serverAddress');
+            if(box) box.textContent = btn.textContent;
+            navigator.clipboard.writeText(btn.textContent).catch(()=>{});
+          };
+          lst.appendChild(btn);
+        });
+      }
+      function bestAddress(info){
+        var isPrivate = function(ip){
+          return ip.startsWith('192.168.') || ip.startsWith('10.') || (/^172\.(1[6-9]|2[0-9]|3[0-1])\./).test(ip);
+        };
+        var rank = function(ip){
+          if(ip.startsWith('192.168.')) return 1;
+          if(ip.startsWith('10.')) return 2;
+          if((/^172\.(1[6-9]|2[0-9]|3[0-1])\./).test(ip)) return 3;
+          if(ip.startsWith('169.254.')) return 99;
+          return 50;
+        };
+        var best = info.localIP || 'localhost';
+        var list = Array.isArray(info.candidates) ? info.candidates.slice() : [];
+        if(list.length > 0){
+          list.sort(function(a,b){ return rank(a)-rank(b); });
+          // Si primary n'est pas privé, préférer la meilleure candidate
+          if(!isPrivate(best)){
+            best = list[0];
+          }
+        }
+        return 'http://' + best + ':' + info.port;
+      }
+      function refresh(){
+        fetch('/api/info', {cache:'no-store'})
+          .then(r=>r.json())
+          .then(function(info){
+            renderCandidates(info);
+            var addr = bestAddress(info);
+            if(last !== addr){
+              last = addr;
+              var box = document.getElementById('serverAddress');
+              if(box) box.textContent = addr;
+              console.log('[Multijoueur] Adresse mise à jour:', addr, 'via host', info.hostHeader);
+            }
+            setTimeout(refresh, 3000);
+          })
+          .catch(function(){ setTimeout(refresh, 5000); });
+      }
+      setTimeout(refresh, 1000);
+    })();
+  </script>
+</body>
+</html>

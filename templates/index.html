@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Puissance 4</title>
     <link rel="stylesheet" href="/static/font.css">
+    <meta name="game-version" content="{{.Version}}">
     <style>
         /* Particles.js background - caché en mode classique */
         #particles-js {
@@ -344,6 +345,7 @@
                 <button id="reset" type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
             </form>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
+            <a href="/menu" style="background:#6366f1;color:white;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;" title="Retour au menu de choix des modes">🏠 Menu</a>
         </div>
     </div>
 
@@ -419,8 +421,60 @@
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
         // Détecter le mode de jeu
-        var gameMode = document.body.className.replace('mode-', '');
+    var gameMode = document.body.className.replace('mode-', '');
         console.log('[Mode] Mode de jeu actuel:', gameMode);
+        // Auto-refresh en mode multijoueur
+        (function(){
+            if(gameMode !== 'multijoueur') return;
+            var lastVersion = null;
+            function poll(){
+                fetch('/state', {cache:'no-store'})
+                .then(r=>r.json())
+                .then(function(data){
+                    if(lastVersion === null){
+                        lastVersion = data.version;
+                    } else if(data.version !== lastVersion){
+                        console.log('[Multijoueur] Nouvelle version détectée => reload');
+                        location.reload();
+                        return;
+                    }
+                    setTimeout(poll, 1000);
+                })
+                .catch(function(err){
+                    console.warn('[Multijoueur] Erreur polling:', err);
+                    setTimeout(poll, 2000);
+                });
+            }
+            setTimeout(poll, 800);
+        })();
+
+        // WebSocket temps réel (si dispo). Préfère WS et fallback sur polling.
+        (function(){
+            if(gameMode !== 'multijoueur') return;
+            var supported = 'WebSocket' in window || 'MozWebSocket' in window;
+            if(!supported) return; // polling fera le boulot
+            try {
+                var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                var ws = new WebSocket(proto + '://' + location.host + '/ws');
+                var initial = parseInt((document.querySelector('meta[name="game-version"]')||{}).content||'0',10);
+                var last = isNaN(initial) ? null : initial;
+                ws.onmessage = function(evt){
+                    try{
+                        var data = JSON.parse(evt.data);
+                        if(typeof data.version === 'number'){
+                            if(last === null){ last = data.version; }
+                            else if(data.version !== last){
+                                console.log('[WS] Version changée => reload');
+                                location.reload();
+                            }
+                        }
+                    }catch(e){ console.warn('WS parse', e); }
+                };
+                ws.onclose = function(){ console.warn('[WS] Fermé, fallback polling actif'); };
+            } catch(e) {
+                console.warn('[WS] Erreur init', e);
+            }
+        })();
         
         // Gestion des boosters (mode Turbo uniquement)
         var boostersR = []; // Boosters du joueur 1 (Rouge)

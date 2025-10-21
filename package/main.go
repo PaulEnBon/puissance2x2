@@ -1,13 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"power4/game"
 	"sync"
+
+	"strings"
+
+	"github.com/gorilla/websocket"
 )
 
 var (
@@ -28,10 +34,248 @@ var (
 		"sub": func(a, b int) int { return a - b },
 		"add": func(a, b int) int { return a + b },
 	}).ParseFiles("templates/index.html"))
-	menuTmpl    = template.Must(template.New("menu.html").ParseFiles("templates/menu.html"))
-	welcomeTmpl = template.Must(template.ParseFiles("templates/welcome.html"))
-	playersTmpl = template.Must(template.ParseFiles("templates/players.html"))
+	menuTmpl        = template.Must(template.New("menu.html").ParseFiles("templates/menu.html"))
+	welcomeTmpl     = template.Must(template.ParseFiles("templates/welcome.html"))
+	playersTmpl     = template.Must(template.ParseFiles("templates/players.html"))
+	multiplayerTmpl = template.Must(template.ParseFiles("templates/multiplayer.html"))
 )
+
+// WebSocket infrastructure
+var (
+	wsUpgrader = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	wsClients  = map[*websocket.Conn]bool{}
+	wsMu       sync.Mutex
+)
+
+func wsRegister(conn *websocket.Conn) {
+	wsMu.Lock()
+	wsClients[conn] = true
+	wsMu.Unlock()
+}
+
+func wsUnregister(conn *websocket.Conn) {
+	wsMu.Lock()
+	delete(wsClients, conn)
+	wsMu.Unlock()
+	_ = conn.Close()
+}
+
+func wsBroadcast(v interface{}) {
+	// Encode once
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("ws broadcast marshal error: %v", err)
+		return
+	}
+	wsMu.Lock()
+	defer wsMu.Unlock()
+	for c := range wsClients {
+		if err := c.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Printf("ws write error, removing client: %v", err)
+			delete(wsClients, c)
+			_ = c.Close()
+		}
+	}
+}
+
+// Broadcast current version to all clients
+func broadcastStateVersion() {
+	mu.Lock()
+	payload := map[string]interface{}{
+		"version":  state.Version,
+		"finished": state.Finished,
+		"winner":   state.Winner,
+		"mode":     state.Mode,
+	}
+	mu.Unlock()
+	wsBroadcast(payload)
+}
+
+// WebSocket handler
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("ws upgrade error: %v", err)
+		return
+	}
+	wsRegister(conn)
+	// Send initial state version
+	mu.Lock()
+	initMsg := map[string]interface{}{"version": state.Version, "mode": state.Mode}
+	mu.Unlock()
+	_ = conn.WriteJSON(initMsg)
+	// Read loop (discard messages); clean up on error
+	go func() {
+		defer wsUnregister(conn)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+}
+
+// getLocalIP retourne l'adresse IP locale de la machine
+// Priorités:
+// 1) IPv4 privée RFC1918 (192.168.x.x, 10.x.x.x, 172.16-31.x.x) sur interface UP non loopback non-virtuelle
+// 2) autre IPv4 non-APIPA (pas 169.254.x.x)
+// 3) fallback "localhost"
+func getLocalIP() string {
+	// Try UDP dial heuristic to discover primary outbound IP
+	if conn, err := net.Dial("udp", "8.8.8.8:80"); err == nil {
+		if la, ok := conn.LocalAddr().(*net.UDPAddr); ok {
+			ip := la.IP.To4()
+			_ = conn.Close()
+			if ip != nil && !(ip[0] == 169 && ip[1] == 254) && ip[3] != 0 && ip[3] != 255 {
+				return ip.String()
+			}
+		} else {
+			_ = conn.Close()
+		}
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "localhost"
+	}
+
+	// Helpers
+	isPrivate := func(ip net.IP) bool {
+		if ip == nil {
+			return false
+		}
+		ip4 := ip.To4()
+		if ip4 == nil {
+			return false
+		}
+		switch {
+		case ip4[0] == 10:
+			return true
+		case ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31:
+			return true
+		case ip4[0] == 192 && ip4[1] == 168:
+			return true
+		default:
+			return false
+		}
+	}
+	isAPIPA := func(ip net.IP) bool {
+		ip4 := ip.To4()
+		return ip4 != nil && ip4[0] == 169 && ip4[1] == 254
+	}
+	isVirtualName := func(name string) bool {
+		n := strings.ToLower(name)
+		for _, bad := range []string{"vmware", "virtualbox", "vEthernet", "hyper-v", "docker", "container", "loopback"} {
+			if strings.Contains(n, strings.ToLower(bad)) {
+				return true
+			}
+		}
+		return false
+	}
+
+	var firstNonApipa net.IP
+	// Pass 1: prefer private IPs
+	for _, iface := range ifaces {
+		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 {
+			continue
+		}
+		if isVirtualName(iface.Name) {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				ip := ipnet.IP.To4()
+				if ip == nil {
+					continue
+				}
+				// ignorer adresses réseau/broadcast
+				if ip[3] == 0 || ip[3] == 255 {
+					continue
+				}
+				if isPrivate(ip) {
+					return ip.String()
+				}
+				if firstNonApipa == nil && !isAPIPA(ip) {
+					firstNonApipa = ip
+				}
+			}
+		}
+	}
+	if firstNonApipa != nil {
+		return firstNonApipa.String()
+	}
+	// Fallback: try any non-loopback IPv4
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, address := range addrs {
+			if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ip := ipnet.IP.To4(); ip != nil {
+					return ip.String()
+				}
+			}
+		}
+	}
+	return "localhost"
+}
+
+// getLocalIPs retourne toutes les IPv4 privées valides des interfaces UP non loopback
+func getLocalIPs() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var ips []string
+	isPrivate := func(ip net.IP) bool {
+		ip4 := ip.To4()
+		if ip4 == nil {
+			return false
+		}
+		if ip4[0] == 10 {
+			return true
+		}
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+		return false
+	}
+	isVirtualName := func(name string) bool {
+		n := strings.ToLower(name)
+		for _, bad := range []string{"vmware", "virtualbox", "vethernet", "hyper-v", "docker", "container", "loopback"} {
+			if strings.Contains(n, bad) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, iface := range ifaces {
+		if (iface.Flags&net.FlagUp) == 0 || (iface.Flags&net.FlagLoopback) != 0 {
+			continue
+		}
+		if isVirtualName(iface.Name) {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				ip := ipnet.IP.To4()
+				if ip == nil {
+					continue
+				}
+				if ip[3] == 0 || ip[3] == 255 {
+					continue
+				}
+				if isPrivate(ip) {
+					ips = append(ips, ip.String())
+				}
+			}
+		}
+	}
+	return ips
+}
 
 func resetBoard() {
 	// En mode exponentiel, on augmente le plateau progressivement
@@ -60,6 +304,12 @@ func resetBoard() {
 		state.Cols = 7
 		state.WinLength = 4
 	}
+	// En mode multijoueur, on garde toujours 6x7
+	if state.Mode == "multijoueur" {
+		state.Rows = 6
+		state.Cols = 7
+		state.WinLength = 4
+	}
 
 	// Nettoyer tout le plateau selon les dimensions actuelles
 	for r := 0; r < state.Rows && r < 15; r++ {
@@ -70,6 +320,8 @@ func resetBoard() {
 	state.Next = "R"
 	state.Winner = ""
 	state.Finished = false
+	// Ne pas oublier: on considère ce reset comme un nouvel état
+	state.Version++
 }
 
 // welcomeHandler affiche l'écran d'accueil avec l'image
@@ -126,6 +378,34 @@ func menuHandler(w http.ResponseWriter, r *http.Request) {
 	defer mu.Unlock()
 	if err := menuTmpl.Execute(w, state); err != nil {
 		log.Printf("menu template error: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+// multiplayerHandler affiche la page d'informations multijoueur
+func multiplayerHandler(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	data := struct {
+		LocalIP     string
+		Port        string
+		Player1Name string
+		Player2Name string
+	}{
+		LocalIP:     getLocalIP(),
+		Port:        port,
+		Player1Name: playerNames[0],
+		Player2Name: playerNames[1],
+	}
+
+	if err := multiplayerTmpl.Execute(w, data); err != nil {
+		log.Printf("multiplayer template error: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
@@ -206,6 +486,10 @@ func formPlayHandler(w http.ResponseWriter, r *http.Request) {
 			state.Next = "R"
 		}
 	}
+	// Incrémenter la version à chaque coup valide
+	state.Version++
+	// notifier les clients temps réel
+	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -226,6 +510,8 @@ func nextLevelHandler(w http.ResponseWriter, r *http.Request) {
 	// En mode classique, on ne change rien
 
 	resetBoard()
+	state.Version++
+	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -253,6 +539,8 @@ func formResetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resetBoard()
+	state.Version++
+	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -272,6 +560,8 @@ func restartModeHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Mode exponentiel: réinitialisé à Puissance 4 (6×7)")
 
 	resetBoard()
+	state.Version++
+	go broadcastStateVersion()
 	http.Redirect(w, r, "/game", http.StatusSeeOther)
 }
 
@@ -296,6 +586,10 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 		state.Mode = "turbo"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
 		log.Printf("Mode sélectionné: turbo (6×7, 4 alignés + boosters)")
+	case "multijoueur":
+		state.Mode = "multijoueur"
+		state.Rows, state.Cols, state.WinLength = 6, 7, 4
+		log.Printf("Mode sélectionné: multijoueur (6×7, 4 alignés en réseau)")
 	default:
 		state.Mode = "exponentiel"
 		state.Rows, state.Cols, state.WinLength = 6, 7, 4
@@ -309,7 +603,57 @@ func setModeHandler(w http.ResponseWriter, r *http.Request) {
 	state.Next = "R"
 	state.Winner = ""
 	state.Finished = false
-	http.Redirect(w, r, "/game", http.StatusSeeOther)
+	// Changement de mode = nouvelle version
+	state.Version++
+	go broadcastStateVersion()
+
+	// Redirection spéciale pour le mode multijoueur
+	if mode == "multijoueur" {
+		http.Redirect(w, r, "/multiplayer", http.StatusSeeOther)
+	} else {
+		http.Redirect(w, r, "/game", http.StatusSeeOther)
+	}
+}
+
+// stateHandler renvoie des informations minimales sur l'état pour le polling
+func stateHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	resp := map[string]interface{}{
+		"version":  state.Version,
+		"finished": state.Finished,
+		"winner":   state.Winner,
+		"mode":     state.Mode,
+	}
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// infoHandler renvoie l'IP locale et le port courant pour affichage dynamique
+func infoHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	primary := getLocalIP()
+	candidates := getLocalIPs()
+	// Si primary semble non utile, choisir une candidate si possible
+	if (strings.HasPrefix(primary, "169.254.") || primary == "localhost") && len(candidates) > 0 {
+		primary = candidates[0]
+	}
+	payload := map[string]interface{}{
+		"localIP":    primary,
+		"port":       port,
+		"candidates": candidates,
+		"hostHeader": r.Host,
+	}
+	log.Printf("/api/info -> primary=%s candidates=%v port=%s host=%s", primary, candidates, port, r.Host)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 func main() {
@@ -318,7 +662,11 @@ func main() {
 	http.HandleFunc("/players", playersHandler)
 	http.HandleFunc("/set-players", setPlayersHandler)
 	http.HandleFunc("/menu", menuHandler)
+	http.HandleFunc("/multiplayer", multiplayerHandler)
 	http.HandleFunc("/game", indexHandler)
+	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/state", stateHandler)
+	http.HandleFunc("/api/info", infoHandler)
 	http.HandleFunc("/play", formPlayHandler)
 	http.HandleFunc("/next-level", nextLevelHandler)
 	http.HandleFunc("/reset", formResetHandler)
@@ -333,6 +681,8 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+	localIP := getLocalIP()
 	log.Printf("Serveur lancé sur http://localhost:%s", port)
+	log.Printf("Adresse réseau local: http://%s:%s", localIP, port)
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+port, nil))
 }
