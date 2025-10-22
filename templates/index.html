@@ -108,9 +108,33 @@
     .board td { width: 60px; height: 60px; border: 3px solid #0f172a; background: #60a5fa; padding: 0; position: relative; text-align: center; vertical-align: middle; }
         .board th { padding: 0; }
     /* token circle - larger */
-    .cell { width: 48px; height: 48px; border-radius: 50%; margin: 5px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
+    .cell { width: 48px; height: 48px; border-radius: 50%; margin: 5px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); position: relative; }
         .cell.R { background: #ef4444; box-shadow: none; border-color: rgba(0,0,0,0.06); }
         .cell.Y { background: #f59e0b; box-shadow: none; border-color: rgba(0,0,0,0.06); }
+    /* Booster styles */
+    .cell.has-booster { 
+        box-shadow: 0 0 15px rgba(234, 179, 8, 0.6), inset 0 2px 4px rgba(2,6,23,0.06); 
+        animation: boosterPulse 2s ease-in-out infinite;
+    }
+    @keyframes boosterPulse {
+        0%, 100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.6), inset 0 2px 4px rgba(2,6,23,0.06); }
+        50% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.9), inset 0 2px 4px rgba(2,6,23,0.06); }
+    }
+    .booster-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 24px;
+        z-index: 10;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        pointer-events: none;
+    }
+    /* Hide booster icon when cell has a pion */
+    .cell.R .booster-icon,
+    .cell.Y .booster-icon {
+        display: none;
+    }
     /* column buttons - bigger */
     .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 60px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
@@ -195,80 +219,80 @@
             position: fixed;
             top: 50%;
             transform: translateY(-50%);
-            background: rgba(17, 24, 39, 0.95);
-            border: 2px solid #3b82f6;
-            border-radius: 16px;
-            padding: 20px;
-            min-width: 250px;
-            max-width: 300px;
-            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+            background: rgba(15, 23, 42, 0.98);
+            border: 3px solid;
+            border-radius: 12px;
+            padding: 15px;
+            width: 180px;
             z-index: 100;
             backdrop-filter: blur(10px);
         }
         
         /* Positionner le panneau du joueur 1 à gauche */
         .boosters-panel.boosters-player1 {
-            left: 20px;
+            left: 10px;
             border-color: #ef4444;
-            box-shadow: 0 10px 40px rgba(239, 68, 68, 0.3);
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
         }
         
         .boosters-panel.boosters-player1 h2 {
-            color: #f87171;
-            border-bottom-color: #ef4444;
+            color: #ef4444;
+            border-bottom: 2px solid #ef4444;
+            margin: 0 0 10px 0;
+            padding-bottom: 8px;
+            font-size: 18px;
+            text-align: center;
         }
         
         /* Positionner le panneau du joueur 2 à droite */
         .boosters-panel.boosters-player2 {
-            right: 20px;
+            right: 10px;
             left: auto;
             border-color: #f59e0b;
-            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3);
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.5);
         }
         
         .boosters-panel.boosters-player2 h2 {
-            color: #fbbf24;
-            border-bottom-color: #f59e0b;
-        }
-        
-        .boosters-panel h2 {
-            margin: 0 0 15px 0;
-            font-size: 1.3rem;
+            color: #f59e0b;
+            border-bottom: 2px solid #f59e0b;
+            margin: 0 0 10px 0;
+            padding-bottom: 8px;
+            font-size: 18px;
             text-align: center;
-            padding-bottom: 10px;
         }
         
         .boosters-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
+            max-height: 400px;
+            overflow-y: auto;
         }
         
         .booster-card {
-            background: linear-gradient(135deg, #1e40af 0%, #3730a3 100%);
-            border: 2px solid #60a5fa;
-            border-radius: 12px;
-            padding: 12px;
+            background: rgba(59, 130, 246, 0.3);
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+            padding: 10px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            animation: boosterAppear 0.5s ease-out;
+            transition: all 0.2s ease;
+            text-align: center;
         }
         
         .booster-card:hover {
-            transform: translateX(5px);
-            box-shadow: 0 5px 20px rgba(96, 165, 250, 0.5);
-            border-color: #93c5fd;
+            background: rgba(59, 130, 246, 0.5);
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
         }
         
-        .booster-card.used,
-        .booster-card.disabled {
-            opacity: 0.5;
+        .booster-card.used {
+            opacity: 0.4;
             cursor: not-allowed;
-            background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
-            border-color: #4b5563;
+            background: rgba(75, 85, 99, 0.3);
+            border-color: #6b7280;
         }
         
-        .booster-card.disabled:hover {
+        .booster-card.used:hover {
             transform: none;
             box-shadow: none;
         }
@@ -282,30 +306,26 @@
         .booster-header {
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 8px;
+            justify-content: center;
+            gap: 8px;
         }
         
         .booster-icon {
-            font-size: 1.8rem;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+            font-size: 28px;
+            line-height: 1;
         }
         
         .booster-name {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: #fff;
-        }
-        
-        .booster-description {
-            font-size: 0.85rem;
-            color: #cbd5e1;
-            line-height: 1.4;
+            font-size: 13px;
+            font-weight: 600;
+            color: white;
         }
         
         .no-boosters {
             text-align: center;
-            color: #94a3b8;
+            color: #9ca3af;
+            padding: 20px 10px;
+            font-size: 14px;
             padding: 20px 10px;
         }
         
@@ -377,7 +397,7 @@
                 <tr>
                     {{range $col := seq 0 (sub .Cols 1)}}
                     <th>
-                        <button class="col-button {{if eq $col $.BlockedColumn}}blocked-column{{end}}" data-column="{{$col}}" type="submit" {{if $.Finished}}disabled{{end}} {{if eq $col $.BlockedColumn}}disabled{{end}}>{{if eq $col $.BlockedColumn}}🚫{{else}}▼{{end}}</button>
+                        <button class="col-button {{if eq $col $.BlockedColumn}}blocked-column{{end}}" data-column="{{$col}}" type="button" {{if $.Finished}}disabled{{end}} {{if eq $col $.BlockedColumn}}disabled{{end}}>{{if eq $col $.BlockedColumn}}🚫{{else}}▼{{end}}</button>
                     </th>
                     {{end}}
                 </tr>
@@ -387,8 +407,19 @@
                 <tr>
                     {{range $c := seq 0 (sub $.Cols 1)}}
                     <td>
-                        {{ $cell := index $.Board $r $c }}
-                        <span class="cell {{if $cell}}{{$cell}}{{end}}"></span>
+                        {{ $cell := index (index $.Board $r) $c }}
+                        {{ $booster := index (index $.BoosterCells $r) $c }}
+                        <span class="cell {{if $cell}}{{$cell}}{{end}} {{if $booster}}has-booster{{end}}" data-booster="{{$booster}}">
+                            {{if $booster}}
+                            <span class="booster-icon">
+                                {{if eq $booster "double-shot"}}⚡{{end}}
+                                {{if eq $booster "remove-piece"}}🗑️{{end}}
+                                {{if eq $booster "block-column"}}🚫{{end}}
+                                {{if eq $booster "swap-colors"}}🔄{{end}}
+                                {{if eq $booster "wildcard"}}⭐{{end}}
+                            </span>
+                            {{end}}
+                        </span>
                     </td>
                     {{end}}
                 </tr>
@@ -412,26 +443,70 @@
     </div>
     
     <!-- Boosters Panel Player 1 (visible only in turbo mode) -->
-    <div class="boosters-panel boosters-player1" id="boostersPanelR" style="display: none;">
+    <div class="boosters-panel boosters-player1" id="boostersPanelR" style="{{if not .IsTurbo}}display: none;{{end}}">
         <h2>⚡ {{.Player1Name}} 🔴</h2>
         <div class="boosters-list" id="boostersListR">
-            <!-- Les boosters du joueur 1 seront ajoutés dynamiquement ici -->
+            {{if .BoostersR}}
+                {{range $idx, $booster := .BoostersR}}
+                <div class="booster-card {{if $booster.Used}}used{{end}}" data-booster-type="{{$booster.Type}}" data-player="R" data-index="{{$idx}}">
+                    <div class="booster-header">
+                        <span class="booster-icon">
+                            {{if eq $booster.Type "double-shot"}}⚡{{end}}
+                            {{if eq $booster.Type "remove-piece"}}🗑️{{end}}
+                            {{if eq $booster.Type "block-column"}}🚫{{end}}
+                            {{if eq $booster.Type "swap-colors"}}🔄{{end}}
+                            {{if eq $booster.Type "wildcard"}}⭐{{end}}
+                        </span>
+                        <span class="booster-name">
+                            {{if eq $booster.Type "double-shot"}}Double Coup{{end}}
+                            {{if eq $booster.Type "remove-piece"}}Retirer Pion{{end}}
+                            {{if eq $booster.Type "block-column"}}Bloquer Colonne{{end}}
+                            {{if eq $booster.Type "swap-colors"}}Inverser Couleurs{{end}}
+                            {{if eq $booster.Type "wildcard"}}Joker{{end}}
+                        </span>
+                    </div>
+                </div>
+                {{end}}
+            {{else}}
             <div class="no-boosters" id="noBoostersR">
                 <p>Aucun booster</p>
                 <small>En attente...</small>
             </div>
+            {{end}}
         </div>
     </div>
     
     <!-- Boosters Panel Player 2 (visible only in turbo mode) -->
-    <div class="boosters-panel boosters-player2" id="boostersPanelY" style="display: none;">
+    <div class="boosters-panel boosters-player2" id="boostersPanelY" style="{{if not .IsTurbo}}display: none;{{end}}">
         <h2>⚡ {{.Player2Name}} 🟡</h2>
         <div class="boosters-list" id="boostersListY">
-            <!-- Les boosters du joueur 2 seront ajoutés dynamiquement ici -->
+            {{if .BoostersY}}
+                {{range $idx, $booster := .BoostersY}}
+                <div class="booster-card {{if $booster.Used}}used{{end}}" data-booster-type="{{$booster.Type}}" data-player="Y" data-index="{{$idx}}">
+                    <div class="booster-header">
+                        <span class="booster-icon">
+                            {{if eq $booster.Type "double-shot"}}⚡{{end}}
+                            {{if eq $booster.Type "remove-piece"}}🗑️{{end}}
+                            {{if eq $booster.Type "block-column"}}🚫{{end}}
+                            {{if eq $booster.Type "swap-colors"}}🔄{{end}}
+                            {{if eq $booster.Type "wildcard"}}⭐{{end}}
+                        </span>
+                        <span class="booster-name">
+                            {{if eq $booster.Type "double-shot"}}Double Coup{{end}}
+                            {{if eq $booster.Type "remove-piece"}}Retirer Pion{{end}}
+                            {{if eq $booster.Type "block-column"}}Bloquer Colonne{{end}}
+                            {{if eq $booster.Type "swap-colors"}}Inverser Couleurs{{end}}
+                            {{if eq $booster.Type "wildcard"}}Joker{{end}}
+                        </span>
+                    </div>
+                </div>
+                {{end}}
+            {{else}}
             <div class="no-boosters" id="noBoostersY">
                 <p>Aucun booster</p>
                 <small>En attente...</small>
             </div>
+            {{end}}
         </div>
     </div>
     
@@ -446,103 +521,143 @@
         (function() {
             var konamiSequence = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'a', 'b', 'a', 'b'];
             var konamiIndex = 0;
-            var konamiActive = false;
+            var konamiActive = false; // Flag pour éviter doubles activations
             
             console.log('🎮 [INIT] Code Konami en cours de chargement...');
             
             function launchEasterEgg() {
-                console.log('🚀 [KONAMI] Appel de l\'API pour lancer ESPERSOUL2...');
+                if (konamiActive) return; // Éviter les doubles activations
+                konamiActive = true;
                 
-                // Afficher une popup de confirmation d'abord
+                console.log('🚀 [KONAMI] Easter Egg activé!');
+                
+                // Détecter si on est en local ou en ligne
+                var isLocal = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '');
+                console.log('[KONAMI] Environnement:', isLocal ? 'LOCAL' : 'EN LIGNE');
+                
+                // Afficher une popup différente selon l'environnement
                 var confirmDialog = document.createElement('div');
                 confirmDialog.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;padding:2rem;border-radius:20px;font-size:1.2rem;z-index:999999;text-align:center;box-shadow:0 0 50px rgba(255,0,255,0.8);border:3px solid #00ff00;max-width:500px;';
-                confirmDialog.innerHTML = `
-                    <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">🎮 EASTER EGG DÉCOUVERT! 🎮</h2>
-                    <p style="margin:1rem 0;">Vous avez trouvé le code secret Konami!</p>
-                    <p style="margin:1rem 0;font-size:1rem;"><strong>ESPERSOUL2</strong> - Un jeu d'aventure RPG</p>
-                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
-                        <p style="margin:0.5rem 0;font-size:0.9rem;">⚠️ <strong>Important:</strong></p>
-                        <p style="margin:0.5rem 0;font-size:0.85rem;">Ce jeu nécessite d'être exécuté localement.</p>
-                        <p style="margin:0.5rem 0;font-size:0.85rem;">En local: Le jeu se lance automatiquement</p>
-                        <p style="margin:0.5rem 0;font-size:0.85rem;">En ligne: Vous pouvez télécharger le jeu</p>
-                    </div>
-                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
-                        <button id="btnLaunch" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">🚀 Lancer / Télécharger</button>
-                        <button id="btnCancel" style="background:#dc2626;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">❌ Annuler</button>
-                    </div>
-                `;
+                
+                if(isLocal) {
+                    // Mode LOCAL - Proposition de lancement
+                    confirmDialog.innerHTML = '<h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">🎮 EASTER EGG DÉCOUVERT! 🎮</h2>' +
+                        '<p style="margin:1rem 0;">Vous avez trouvé le code secret Konami!</p>' +
+                        '<p style="margin:1rem 0;font-size:1rem;"><strong>ESPERSOUL2</strong> - Un jeu d\'aventure RPG</p>' +
+                        '<div style="background:rgba(0,255,0,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">' +
+                        '<p style="margin:0.5rem 0;font-size:0.9rem;">✅ <strong>Mode Local Détecté</strong></p>' +
+                        '<p style="margin:0.5rem 0;font-size:0.85rem;">Le jeu peut être lancé directement!</p>' +
+                        '</div>' +
+                        '<div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">' +
+                        '<button id="btnLaunch" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">🚀 Lancer le jeu</button>' +
+                        '<button id="btnCancel" style="background:#dc2626;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">❌ Annuler</button>' +
+                        '</div>';
+                } else {
+                    // Mode EN LIGNE - Téléchargement direct
+                    confirmDialog.innerHTML = '<h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">🎮 EASTER EGG DÉCOUVERT! 🎮</h2>' +
+                        '<p style="margin:1rem 0;">Vous avez trouvé le code secret Konami!</p>' +
+                        '<p style="margin:1rem 0;font-size:1rem;"><strong>ESPERSOUL2</strong> - Un jeu d\'aventure RPG</p>' +
+                        '<div style="background:rgba(255,165,0,0.2);padding:1rem;border-radius:10px;margin:1rem 0;">' +
+                        '<p style="margin:0.5rem 0;font-size:0.9rem;">🌐 <strong>Mode En Ligne</strong></p>' +
+                        '<p style="margin:0.5rem 0;font-size:0.85rem;">Le jeu ne peut pas être lancé automatiquement depuis un site web.</p>' +
+                        '<p style="margin:0.5rem 0;font-size:0.85rem;">Téléchargez-le pour y jouer sur votre ordinateur!</p>' +
+                        '</div>' +
+                        '<div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">' +
+                        '<p style="margin:0.5rem 0;font-size:0.95rem;"><strong>📋 Instructions:</strong></p>' +
+                        '<ol style="text-align:left;margin:0.5rem 0;padding-left:2rem;font-size:0.9rem;">' +
+                        '<li>Cliquez sur "Télécharger ESPERSOUL2"</li>' +
+                        '<li>Ouvrez le fichier téléchargé</li>' +
+                        '<li>Double-cliquez sur ESPERSOUL2.exe</li>' +
+                        '<li>Profitez du jeu! 🎮</li>' +
+                        '</ol>' +
+                        '</div>' +
+                        '<div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">' +
+                        '<a href="/download/espersoul2" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">� Télécharger ESPERSOUL2</a>' +
+                        '<button id="btnCancel" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>' +
+                        '</div>' +
+                        '<p style="margin-top:1rem;font-size:0.8rem;color:#888;">Le jeu est totalement gratuit et sans virus 🛡️</p>';
+                }
+                
                 document.body.appendChild(confirmDialog);
                 
-                // Bouton Annuler
-                document.getElementById('btnCancel').addEventListener('click', function() {
+                // Bouton Annuler/Fermer
+                var btnCancel = confirmDialog.querySelector('#btnCancel');
+                btnCancel.addEventListener('click', function() {
                     confirmDialog.remove();
-                    console.log('🚫 [KONAMI] Annulé par l\'utilisateur');
+                    konamiActive = false;
+                    console.log('🚫 [KONAMI] Fermé par l\'utilisateur');
                 });
                 
-                // Bouton Lancer/Télécharger
-                document.getElementById('btnLaunch').addEventListener('click', function() {
-                    console.log('✅ [KONAMI] Utilisateur a confirmé');
-                    
-                    // Tentative de lancement (fonctionnera en local)
-                    fetch('/api/launch-easteregg', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
-                    })
-                    .then(function(response) {
-                        return response.json();
-                    })
-                    .then(function(data) {
-                        console.log('✅ [KONAMI] Réponse serveur:', data);
+                // Bouton Lancer (uniquement en mode local)
+                var btnLaunch = confirmDialog.querySelector('#btnLaunch');
+                if(btnLaunch && isLocal) {
+                    btnLaunch.addEventListener('click', function() {
+                        console.log('✅ [KONAMI] Lancement du jeu en mode local...');
                         
-                        if(data.success) {
-                            // En local: le jeu se lance
-                            console.log('🎮 [KONAMI] ESPERSOUL2 lancé avec succès!');
-                            confirmDialog.innerHTML = `
-                                <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">✅ JEU LANCÉ!</h2>
-                                <p style="margin:1rem 0;">ESPERSOUL2 devrait s'ouvrir dans une nouvelle fenêtre.</p>
-                                <p style="margin:0.5rem 0;font-size:0.9rem;">Regardez votre barre des tâches!</p>
-                                <button onclick="this.parentElement.remove()" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1rem;cursor:pointer;margin-top:1rem;">OK</button>
-                            `;
-                            setTimeout(function() {
-                                if(confirmDialog.parentNode) {
+                        // Tentative de lancement
+                        fetch('/api/launch-easteregg', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'}
+                        })
+                        .then(function(response) { return response.json(); })
+                        .then(function(data) {
+                            console.log('✅ [KONAMI] Réponse serveur:', data);
+                            
+                            // Vérifier si c'est un téléchargement ou un lancement
+                            if(data.method === 'download') {
+                                // Proposer le téléchargement au lieu du lancement
+                                confirmDialog.innerHTML = '<h2 style="margin:0 0 1rem 0;color:#ff9500;font-size:2rem;">💾 TÉLÉCHARGEMENT</h2>' +
+                                    '<p style="margin:1rem 0;">Le lancement automatique n\'est pas disponible.</p>' +
+                                    '<p style="margin:0.5rem 0;font-size:0.9rem;">Téléchargez le jeu pour y jouer!</p>' +
+                                    '<div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">' +
+                                    '<a href="/download/espersoul2" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">💾 Télécharger ESPERSOUL2</a>' +
+                                    '<button id="btnClose" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>' +
+                                    '</div>';
+                                
+                                var btnClose = confirmDialog.querySelector('#btnClose');
+                                btnClose.addEventListener('click', function() {
                                     confirmDialog.remove();
-                                }
-                            }, 5000);
-                        } else {
-                            // Offrir le téléchargement
-                            showDownloadOption(confirmDialog);
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('❌ [KONAMI] Erreur serveur:', error);
-                        // En cas d'erreur (serveur en ligne), proposer le téléchargement
-                        showDownloadOption(confirmDialog);
+                                    konamiActive = false;
+                                });
+                            } else {
+                                // Lancement réussi
+                                confirmDialog.innerHTML = '<h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">✅ JEU LANCÉ!</h2>' +
+                                    '<p style="margin:1rem 0;">ESPERSOUL2 devrait s\'ouvrir dans une nouvelle fenêtre.</p>' +
+                                    '<p style="margin:0.5rem 0;font-size:0.9rem;">Regardez votre barre des tâches!</p>' +
+                                    '<button id="btnOk" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1rem;cursor:pointer;margin-top:1rem;">OK</button>';
+                                
+                                var btnOk = confirmDialog.querySelector('#btnOk');
+                                btnOk.addEventListener('click', function() {
+                                    confirmDialog.remove();
+                                    konamiActive = false;
+                                });
+                                
+                                setTimeout(function() {
+                                    if(confirmDialog.parentNode) {
+                                        confirmDialog.remove();
+                                        konamiActive = false;
+                                    }
+                                }, 5000);
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('❌ [KONAMI] Erreur serveur:', error);
+                            confirmDialog.innerHTML = '<h2 style="margin:0 0 1rem 0;color:#ff9500;font-size:2rem;">⚠️ ERREUR</h2>' +
+                                '<p style="margin:1rem 0;">Impossible de contacter le serveur.</p>' +
+                                '<p style="margin:0.5rem 0;font-size:0.85rem;">Téléchargez le jeu à la place:</p>' +
+                                '<div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">' +
+                                '<a href="/download/espersoul2" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">💾 Télécharger</a>' +
+                                '<button id="btnClose" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>' +
+                                '</div>';
+                            
+                            var btnClose = confirmDialog.querySelector('#btnClose');
+                            btnClose.addEventListener('click', function() {
+                                confirmDialog.remove();
+                                konamiActive = false;
+                            });
+                        });
                     });
-                });
-            }
-            
-            function showDownloadOption(dialog) {
-                console.log('💾 [KONAMI] Proposition de téléchargement');
-                dialog.innerHTML = `
-                    <h2 style="margin:0 0 1rem 0;color:#ff9500;font-size:2rem;">💾 MODE TÉLÉCHARGEMENT</h2>
-                    <p style="margin:1rem 0;">Le jeu ne peut pas être lancé automatiquement depuis un serveur en ligne.</p>
-                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
-                        <p style="margin:0.5rem 0;font-size:0.95rem;"><strong>📋 Instructions:</strong></p>
-                        <ol style="text-align:left;margin:0.5rem 0;padding-left:2rem;font-size:0.9rem;">
-                            <li>Cliquez sur "Télécharger ESPERSOUL2"</li>
-                            <li>Extrayez le dossier ZIP</li>
-                            <li>Double-cliquez sur ESPERSOUL2.exe</li>
-                            <li>Profitez du jeu! 🎮</li>
-                        </ol>
-                    </div>
-                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
-                        <a href="/download/espersoul2" download style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">💾 Télécharger ESPERSOUL2</a>
-                        <button onclick="this.parentElement.parentElement.remove()" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>
-                    </div>
-                    <p style="margin-top:1rem;font-size:0.8rem;color:#888;">Le jeu est totalement gratuit et sans virus 🛡️</p>
-                `;
+                }
             }
             
             // Écouteur prioritaire en phase de capture
@@ -584,59 +699,59 @@
             console.log('🎮 [INIT] Code Konami activé! Séquence: ↑ ↑ ↓ ↓ A B A B');
         })();
         
-        // Détecter le mode de jeu
-    var gameMode = document.body.className.replace('mode-', '');
-        console.log('[Mode] Mode de jeu actuel:', gameMode);
-        // Auto-refresh en mode multijoueur
+        // Détecter le mode de jeu et le code de la partie
+        var gameMode = document.body.className.replace('mode-', '');
+        var partyCode = new URLSearchParams(window.location.search).get('code');
+        console.log('[Mode] Mode de jeu actuel:', gameMode, '| Code partie:', partyCode);
+        
+        // WebSocket pour tous les modes (solo et multi)
+        var gameWS = null;
         (function(){
-            if(gameMode !== 'multijoueur') return;
-            var lastVersion = null;
-            function poll(){
-                fetch('/state', {cache:'no-store'})
-                .then(r=>r.json())
-                .then(function(data){
-                    if(lastVersion === null){
-                        lastVersion = data.version;
-                    } else if(data.version !== lastVersion){
-                        console.log('[Multijoueur] Nouvelle version détectée => reload');
-                        location.reload();
-                        return;
-                    }
-                    setTimeout(poll, 1000);
-                })
-                .catch(function(err){
-                    console.warn('[Multijoueur] Erreur polling:', err);
-                    setTimeout(poll, 2000);
-                });
+            if(!partyCode) {
+                console.warn('[WS] Pas de code de partie, mode déconnecté');
+                return;
             }
-            setTimeout(poll, 800);
-        })();
-
-        // WebSocket temps réel (si dispo). Préfère WS et fallback sur polling.
-        (function(){
-            if(gameMode !== 'multijoueur') return;
-            var supported = 'WebSocket' in window || 'MozWebSocket' in window;
-            if(!supported) return; // polling fera le boulot
+            
+            var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            var wsUrl = proto + '://' + location.host + '/ws/' + partyCode;
+            console.log('[WS] Connexion à:', wsUrl);
+            
             try {
-                var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-                var ws = new WebSocket(proto + '://' + location.host + '/ws');
-                var initial = parseInt((document.querySelector('meta[name="game-version"]')||{}).content||'0',10);
-                var last = isNaN(initial) ? null : initial;
-                ws.onmessage = function(evt){
-                    try{
-                        var data = JSON.parse(evt.data);
-                        if(typeof data.version === 'number'){
-                            if(last === null){ last = data.version; }
-                            else if(data.version !== last){
-                                console.log('[WS] Version changée => reload');
-                                location.reload();
-                            }
-                        }
-                    }catch(e){ console.warn('WS parse', e); }
+                gameWS = new WebSocket(wsUrl);
+                
+                gameWS.onopen = function() {
+                    console.log('[WS] ✅ Connecté au serveur de jeu');
                 };
-                ws.onclose = function(){ console.warn('[WS] Fermé, fallback polling actif'); };
+                
+                gameWS.onmessage = function(evt) {
+                    try {
+                        var data = JSON.parse(evt.data);
+                        console.log('[WS] Message reçu:', data);
+                        
+                        if(data.type === 'error') {
+                            alert(data.message);
+                            return;
+                        }
+                        
+                        // Mise à jour de l'état du jeu
+                        if(data.type === 'state' || data.state || data.Board || data.Next || data.Finished !== undefined) {
+                            console.log('[WS] État du jeu mis à jour, rechargement...');
+                            location.reload();
+                        }
+                    } catch(e) {
+                        console.warn('[WS] Erreur parsing:', e);
+                    }
+                };
+                
+                gameWS.onerror = function(err) {
+                    console.error('[WS] ❌ Erreur:', err);
+                };
+                
+                gameWS.onclose = function() {
+                    console.warn('[WS] 🔌 Connexion fermée');
+                };
             } catch(e) {
-                console.warn('[WS] Erreur init', e);
+                console.error('[WS] Erreur init:', e);
             }
         })();
         
@@ -651,10 +766,23 @@
         var noBoostersY = document.getElementById('noBoostersY');
         
         // Afficher les panneaux des boosters en mode turbo
-        if(gameMode === 'turbo') {
+        if(gameMode.indexOf('turbo') !== -1) {
             if(boostersPanelR) boostersPanelR.style.display = 'block';
             if(boostersPanelY) boostersPanelY.style.display = 'block';
             console.log('[Boosters] Panneaux activés en mode Turbo');
+            
+            // Attacher les événements de clic sur les cartes de boosters existantes
+            document.querySelectorAll('.booster-card:not(.used)').forEach(function(card) {
+                card.addEventListener('click', function() {
+                    var boosterType = card.getAttribute('data-booster-type');
+                    var player = card.getAttribute('data-player');
+                    var index = parseInt(card.getAttribute('data-index'));
+                    
+                    console.log('[Boosters] Clic sur booster:', boosterType, 'joueur:', player);
+                    useBoosterFromCard(boosterType, player, index, card);
+                });
+                card.style.cursor = 'pointer';
+            });
         }
         
         // Définition des types de boosters disponibles
@@ -770,6 +898,47 @@
         var doublePlayActive = false;
         
         // Fonction pour utiliser un booster
+        
+        // Fonction pour utiliser un booster depuis une carte du template (générée par le serveur)
+        function useBoosterFromCard(boosterType, player, index, cardElement) {
+            // Vérifier que c'est bien le tour du joueur
+            var currentPlayer = getCurrentPlayer();
+            if(currentPlayer !== player) {
+                alert('⚠️ Ce n\'est pas votre tour!');
+                console.log('[Boosters] Ce n\'est pas le tour du joueur', player);
+                return;
+            }
+            
+            console.log('[Boosters] Utilisation du booster par joueur', player, ':', boosterType);
+            
+            // Marquer visuellement comme utilisé
+            if(cardElement) {
+                cardElement.classList.add('used');
+                cardElement.style.cursor = 'not-allowed';
+            }
+            
+            // Exécuter la logique selon le type de booster
+            switch(boosterType) {
+                case 'double-shot':
+                    activateDoubleShot(player, index);
+                    break;
+                case 'remove-piece':
+                    activateRemovePiece(player, index);
+                    break;
+                case 'block-column':
+                    activateBlockColumn(player, index);
+                    break;
+                case 'swap-colors':
+                    activateSwapColors(player, index);
+                    break;
+                case 'wildcard':
+                    activateWildcard(player, index);
+                    break;
+                default:
+                    alert('Booster non implémenté: ' + boosterType);
+            }
+        }
+        
         function useBooster(boosterId, player) {
             // Vérifier que c'est bien le tour du joueur
             var currentPlayer = getCurrentPlayer();
@@ -812,29 +981,20 @@
         // ===== IMPLÉMENTATION DES BOOSTERS =====
         
         // 1. Double Coup - Jouer deux fois d'affilée
-        function activateDoubleShot(player) {
-            // Envoyer au serveur pour activer le double coup
-            var form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/booster-action';
-            
-            var fields = {
-                'action': 'double-shot',
-                'player': player
-            };
-            
-            for(var key in fields) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = fields[key];
-                form.appendChild(input);
+        function activateDoubleShot(player, index) {
+            // Envoyer au serveur via WebSocket pour activer le double coup
+            if(gameWS && gameWS.readyState === WebSocket.OPEN) {
+                gameWS.send(JSON.stringify({
+                    type: 'booster',
+                    action: 'double-shot',
+                    player: player,
+                    index: index
+                }));
+                alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
+                console.log('[Booster] Double Coup activé pour', player);
+            } else {
+                alert('❌ Erreur: Connexion perdue');
             }
-            
-            document.body.appendChild(form);
-            alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
-            console.log('[Booster] Double Coup activé pour', player);
-            form.submit();
         }
         
         // 2. Effaceur - Retirer un pion adverse
@@ -941,7 +1101,7 @@
         // ===== GESTION DES CLICS SUR LE PLATEAU =====
         
         // Initialiser les événements de clic sur le plateau en mode turbo
-        if(gameMode === 'turbo') {
+        if(gameMode.indexOf('turbo') !== -1) {
             // Nombre de colonnes depuis le serveur
             var boardCols = parseInt(document.querySelector('.board thead tr').children.length) || 7;
             
@@ -1156,7 +1316,7 @@
         
         // Fonction pour mettre à jour l'état actif/inactif des panneaux de boosters
         function updateBoosterPanelsState() {
-            if(gameMode !== 'turbo') return;
+            if(gameMode.indexOf('turbo') === -1) return;
             
             var currentPlayer = getCurrentPlayer();
             
@@ -1180,7 +1340,7 @@
         }
         
         // Mettre à jour l'état des panneaux au chargement et après chaque coup
-        if(gameMode === 'turbo') {
+        if(gameMode.indexOf('turbo') !== -1) {
             updateBoosterPanelsState();
             
             // Observer les changements dans le status pour mettre à jour les panneaux
@@ -1194,7 +1354,7 @@
         }
         
         // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
-        if(gameMode === 'turbo') {
+        if(gameMode.indexOf('turbo') !== -1) {
             setTimeout(function() {
                 addBooster('double-shot', 'R');
                 addBooster('remove-piece', 'R');
@@ -1245,33 +1405,9 @@
         
         // Fonction pour créer l'effet ghost
         function createGhostEffect(buttonElement) {
-            // Désactiver l'effet ghost en mode classique
-            if(gameMode === 'classique') {
-                console.log('[Ghost] Effet désactivé en mode classique');
-                return;
-            }
-            
-            // Utiliser l'animation ghost
-            var ghostImage = '/images/anim_ghost.png';
-            
-            // Créer l'élément ghost
-            var ghost = document.createElement('img');
-            ghost.src = ghostImage;
-            ghost.className = 'ghost-anim';
-            ghost.style.width = '600px';
-            ghost.style.height = '600px';
-            
-            console.log('[Ghost] Animation fantôme ÉNORME créée au centre de l\'écran');
-            
-            // Ajouter au body
-            document.body.appendChild(ghost);
-            
-            // Retirer après l'animation (3 secondes)
-            setTimeout(function() {
-                if(ghost.parentNode) {
-                    ghost.parentNode.removeChild(ghost);
-                }
-            }, 3000);
+            // Effet fantôme désactivé
+            console.log('[Ghost] Effet fantôme désactivé');
+            return;
         }
         
         // Bouton Reset pour réinitialiser les scores
@@ -1293,7 +1429,7 @@
         var resetForm = document.querySelector('form[action="/reset"]');
         if(resetForm) {
             resetForm.addEventListener('submit', function(e) {
-                if(gameMode === 'exponentiel') {
+                if(gameMode.indexOf('exponentiel') !== -1) {
                     localStorage.setItem('scoreR', '0');
                     localStorage.setItem('scoreY', '0');
                     console.log('[Reset Complet] Scores réinitialisés à 0');
@@ -1301,7 +1437,7 @@
             });
         }
         
-        // Ensure column value is set when button is clicked
+        // Gestion des clics sur les colonnes - ENVOYER VIA WEBSOCKET
         (function(){
             const form = document.getElementById('playForm');
             const hiddenColumn = document.getElementById('hiddenColumn');
@@ -1311,40 +1447,40 @@
             const buttons = form.querySelectorAll('.col-button');
             buttons.forEach(function(button){
                 button.addEventListener('click', function(e){
-                    const columnValue = this.getAttribute('data-column');
+                    const columnValue = parseInt(this.getAttribute('data-column'));
                     hiddenColumn.value = columnValue;
                     
                     // Créer l'effet ghost à la position du bouton
                     createGhostEffect(this);
                     
-                    console.log('[button click] set column to:', columnValue, '| Clics actuels:', compte);
+                    console.log('[button click] Colonne:', columnValue);
+                    
+                    // Envoyer le coup via WebSocket
+                    if(gameWS && gameWS.readyState === WebSocket.OPEN) {
+                        console.log('[WS] Envoi du coup:', columnValue);
+                        gameWS.send(JSON.stringify({
+                            type: 'play',
+                            col: columnValue
+                        }));
+                        
+                        // Incrémenter le compteur de clics
+                        compte++;
+                        localStorage.setItem('compteClics', compte);
+                        console.log('[Clics] Nouveau compte:', compte);
+                    } else {
+                        console.error('[WS] ❌ WebSocket non connecté!');
+                        alert('Connexion au serveur perdue. Rechargez la page.');
+                    }
                 });
             });
             
             let isSubmitting = false;
             
-            // Validate on submit
+            // EMPÊCHER TOUTE SOUMISSION DE FORMULAIRE (le jeu utilise maintenant WebSocket/AJAX)
             form.addEventListener('submit', function(e){
-                const columnValue = hiddenColumn.value;
-                
-                if(!columnValue || columnValue === ''){
-                    e.preventDefault();
-                    console.log('[form] prevented submission - no column value');
-                    return false;
-                }
-                
-                if(isSubmitting){
-                    e.preventDefault();
-                    console.log('[form] prevented duplicate submission');
-                    return false;
-                }
-                
-                // Incrémenter et sauvegarder le compteur AVANT la soumission
-                compte++;
-                localStorage.setItem('compteClics', compte);
-                console.log('[form submit] Colonne:', columnValue, '| Nouveau compte sauvegardé:', compte);
-                
-                isSubmitting = true;
+                e.preventDefault(); // TOUJOURS empêcher la soumission
+                console.log('[form] Soumission bloquée - le jeu utilise WebSocket/AJAX');
+                return false;
             });
         })();   
     </script>
@@ -1354,7 +1490,7 @@
     <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script>
         // Ne pas initialiser particles.js en mode classique
-        if(gameMode !== 'classique') {
+        if(gameMode.indexOf('classique') === -1) {
             // Récupérer le compte de clics pour définir le nombre de particules
             var nombreParticules = parseInt(localStorage.getItem('compteClics')) || 0;
             console.log('[Particles] Nombre de particules:', nombreParticules);

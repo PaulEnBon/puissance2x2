@@ -10,7 +10,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
-	"os/exec"
+	_ "os/exec" // Gardé pour usage futur
 	"power4/game"
 	"strings"
 	"sync"
@@ -239,9 +239,13 @@ func wsPartyHandler(w http.ResponseWriter, r *http.Request) {
 			if err := conn.ReadJSON(&msg); err != nil {
 				return
 			}
-			if msg["type"] == "play" {
+			msgType, _ := msg["type"].(string)
+			switch msgType {
+			case "play":
 				col := int(msg["col"].(float64))
 				handlePartyMove(p, conn, col)
+			case "booster":
+				handleBoosterAction(p, conn, msg)
 			}
 		}
 	}()
@@ -302,6 +306,17 @@ func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 		boosterType := p.State.BoosterCells[placedRow][col]
 		log.Printf("[Booster] Joueur %s a récupéré un booster: %s en (%d,%d)", p.State.Next, boosterType, placedRow, col)
 
+		// Ajouter le booster à la collection du joueur
+		newBooster := game.Booster{
+			Type: boosterType,
+			Used: false,
+		}
+		if p.State.Next == "R" {
+			p.State.BoostersR = append(p.State.BoostersR, newBooster)
+		} else {
+			p.State.BoostersY = append(p.State.BoostersY, newBooster)
+		}
+
 		boosterObtained = boosterType
 		playerWhoGotBooster = p.State.Next
 		p.State.BoosterCells[placedRow][col] = "" // Retirer le booster de la grille
@@ -338,6 +353,67 @@ func handlePartyMove(p *Party, conn *websocket.Conn, col int) {
 			response["player"] = playerWhoGotBooster
 		}
 		_ = c.WriteJSON(response)
+	}
+}
+
+func handleBoosterAction(p *Party, conn *websocket.Conn, msg map[string]interface{}) {
+	p.Mu.Lock()
+	defer p.Mu.Unlock()
+
+	action, _ := msg["action"].(string)
+	player, _ := msg["player"].(string)
+	indexFloat, _ := msg["index"].(float64)
+	index := int(indexFloat)
+
+	log.Printf("[Booster] Action reçue: %s de joueur %s (index %d)", action, player, index)
+
+	// Vérifier que c'est bien le tour du joueur
+	if player != p.State.Next {
+		errorMsg := map[string]interface{}{
+			"type":    "error",
+			"message": "Ce n'est pas votre tour!",
+		}
+		_ = conn.WriteJSON(errorMsg)
+		return
+	}
+
+	// Traiter selon l'action
+	switch action {
+	case "double-shot":
+		// Activer le double coup pour le prochain tour
+		p.DoublePlayNext = true
+
+		// Marquer le booster comme utilisé
+		if player == "R" && index >= 0 && index < len(p.State.BoostersR) {
+			p.State.BoostersR[index].Used = true
+		} else if player == "Y" && index >= 0 && index < len(p.State.BoostersY) {
+			p.State.BoostersY[index].Used = true
+		}
+
+		log.Printf("[Booster] Double coup activé pour joueur %s", player)
+
+		// Envoyer confirmation
+		for c := range p.Clients {
+			_ = c.WriteJSON(map[string]interface{}{
+				"type":    "state",
+				"state":   p.State,
+				"blocked": p.BlockedColumn,
+			})
+		}
+
+	case "block-column":
+		// Le client doit envoyer la colonne à bloquer dans un message suivant
+		// Pour l'instant, on marque juste le booster comme utilisé
+		if player == "R" && index >= 0 && index < len(p.State.BoostersR) {
+			p.State.BoostersR[index].Used = true
+		} else if player == "Y" && index >= 0 && index < len(p.State.BoostersY) {
+			p.State.BoostersY[index].Used = true
+		}
+
+		log.Printf("[Booster] Bloqueur activé pour joueur %s (en attente de sélection)", player)
+
+	default:
+		log.Printf("[Booster] Action non implémentée: %s", action)
 	}
 }
 
@@ -626,12 +702,28 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 		Player2Name   string
 		BlockedColumn int
 		Code          string
+		IsTurbo       bool
 	}{
 		GameState:     p.State,
 		Player1Name:   playerNames[0],
 		Player2Name:   playerNames[1],
 		BlockedColumn: p.BlockedColumn,
 		Code:          code,
+		IsTurbo:       strings.Contains(p.State.Mode, "turbo"),
+	}
+
+	// Debug: afficher les boosters dans le template
+	hasBooster := false
+	for r := 0; r < p.State.Rows; r++ {
+		for c := 0; c < p.State.Cols; c++ {
+			if p.State.BoosterCells[r][c] != "" {
+				hasBooster = true
+				log.Printf("[Template Debug] Booster à (%d,%d): %s", r, c, p.State.BoosterCells[r][c])
+			}
+		}
+	}
+	if !hasBooster {
+		log.Printf("[Template Debug] AUCUN booster dans le state pour partie %s", code)
 	}
 
 	if err := indexTmpl.Execute(w, data); err != nil {
@@ -641,58 +733,35 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // launchEasterEggHandler lance le jeu ESPERSOUL2 comme Easter Egg
+// NOTE: Le lancement automatique est désactivé car il fait crasher le serveur
+// L'utilisateur doit télécharger le jeu via /download/espersoul2
 func launchEasterEggHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	log.Println("🎮 EASTER EGG ACTIVÉ! Lancement de ESPERSOUL2...")
+	log.Println("🎮 EASTER EGG ACTIVÉ!")
 
-	// Définir le chemin vers le jeu (chemin absolu)
+	// Définir le chemin vers le jeu
 	gamePath := "epp4\\ESPERSOUL2"
+	exePath := gamePath + "\\ESPERSOUL2.exe"
 
 	// Vérifier si l'exécutable existe
-	exePath := gamePath + "\\ESPERSOUL2.exe"
-	log.Printf("🔍 Vérification de l'exécutable: %s", exePath)
-
 	if _, err := os.Stat(exePath); err == nil {
-		// Lancer l'exécutable directement dans une nouvelle fenêtre
-		log.Println("✅ Exécutable trouvé, lancement...")
-		go func() {
-			cmd := exec.Command("cmd", "/C", "start", "", exePath)
-			if err := cmd.Start(); err != nil {
-				log.Printf("❌ Erreur lancement .exe: %v", err)
-			} else {
-				log.Println("✅ ESPERSOUL2.exe lancé dans une nouvelle fenêtre!")
-			}
-		}()
+		log.Println("✅ ESPERSOUL2.exe trouvé - téléchargement disponible")
+		// Retourner succès mais indiquer qu'il faut télécharger
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"success": true,
-			"message": "🎮 ESPERSOUL2.exe lancé!",
-			"method":  "executable",
+			"success":  true,
+			"message":  "🎮 ESPERSOUL2 disponible au téléchargement!",
+			"method":   "download",
+			"download": "/download/espersoul2",
 		})
 		return
 	}
 
-	log.Println("⚠️ Exécutable non trouvé, lancement via go run...")
-
-	// Sinon, lancer via go run dans une nouvelle fenêtre CMD
-	go func() {
-		// Windows: ouvrir une nouvelle fenêtre CMD et lancer go run
-		// /K garde la fenêtre ouverte après l'exécution
-		cmd := exec.Command("cmd", "/C", "start", "cmd", "/K", "cd", gamePath, "&&", "go", "run", "main.go")
-
-		log.Printf("🚀 Commande: %v", cmd.Args)
-
-		if err := cmd.Start(); err != nil {
-			log.Printf("❌ Erreur lancement Easter Egg: %v", err)
-		} else {
-			log.Println("✅ ESPERSOUL2 lancé dans une nouvelle fenêtre CMD!")
-		}
-	}()
-
+	log.Println("⚠️ ESPERSOUL2.exe non trouvé")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "🎮 ESPERSOUL2 en cours de lancement...",
-		"method":  "go run",
+		"success": false,
+		"message": "Jeu non disponible",
+		"method":  "none",
 	})
 }
 
