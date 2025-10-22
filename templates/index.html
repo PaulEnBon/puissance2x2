@@ -111,28 +111,6 @@
     .cell { width: 48px; height: 48px; border-radius: 50%; margin: 5px auto; background: #ffffff; display: block; box-shadow: inset 0 2px 4px rgba(2,6,23,0.06); border: 1px solid rgba(2,6,23,0.06); }
         .cell.R { background: #ef4444; box-shadow: none; border-color: rgba(0,0,0,0.06); }
         .cell.Y { background: #f59e0b; box-shadow: none; border-color: rgba(0,0,0,0.06); }
-    /* Booster cell styling */
-    .board td.booster-cell { 
-        background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%) !important;
-        box-shadow: 0 0 20px rgba(236, 72, 153, 0.6);
-        animation: boosterGlow 2s ease-in-out infinite;
-        position: relative;
-    }
-    .board td.booster-cell::before {
-        content: '⚡';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 30px;
-        opacity: 0.8;
-        pointer-events: none;
-        z-index: 1;
-    }
-    @keyframes boosterGlow {
-        0%, 100% { box-shadow: 0 0 20px rgba(236, 72, 153, 0.6); }
-        50% { box-shadow: 0 0 35px rgba(236, 72, 153, 1); }
-    }
     /* column buttons - bigger */
     .col-button { background: rgba(255,255,255,0.92); border: 1px solid rgba(15,23,42,0.12); cursor: pointer; width: 60px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 1; color: #0f172a; border-radius: 6px; }
     .col-button:hover { background: white; box-shadow: 0 1px 3px rgba(2,6,23,0.08); }
@@ -353,7 +331,7 @@
         }
         
         /* Hide boosters panel in non-turbo modes */
-        body:not(.mode-turbo):not(.mode-solo-turbo):not(.mode-multi-turbo) .boosters-panel {
+        body:not(.mode-turbo) .boosters-panel {
             display: none !important;
         }
     </style>
@@ -361,10 +339,6 @@
 <body class="mode-{{.Mode}}">
     <div class="game-container">
         <h1>Puissance 4</h1>
-        <!-- Affichage de l'équipe du joueur -->
-        <div id="player-team-indicator" style="text-align:center;padding:8px;margin-bottom:10px;background:#1e293b;border-radius:8px;font-weight:bold;display:none;">
-            <span id="player-team-text"></span>
-        </div>
         <div class="info">
         <div id="status">
             {{if .Finished}}
@@ -389,14 +363,8 @@
             <div id="compteDisplay" style="background:#16a34a;color:white;padding:0.5rem 0.75rem;border-radius:6px;font-weight:bold;">
                 Clics: <span id="compteValue">0</span>
             </div>
-            <form method="post" action="/next-level" style="display:inline">
-                <input type="hidden" name="mode" value="{{.Mode}}">
-                <button id="nextLevel" type="submit">Nouvelle partie</button>
-            </form>
-            <form method="post" action="/reset" style="display:inline">
-                <input type="hidden" name="mode" value="{{.Mode}}">
-                <button id="reset" type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
-            </form>
+            <button id="nextLevel" type="button" onclick="location.reload()" style="background:#1d4ed8;color:white;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;">Nouvelle partie</button>
+            <button id="reset" type="button" onclick="if(confirm('Voulez-vous vraiment réinitialiser complètement ?')) { localStorage.setItem('scoreR', '0'); localStorage.setItem('scoreY', '0'); location.reload(); }" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
             <button id="effectsToggle" type="button" aria-pressed="true" title="Activer/désactiver les effets">Effets</button>
             <a href="/menu" style="background:#6366f1;color:white;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;" title="Retour au menu de choix des modes">🏠 Menu</a>
         </div>
@@ -404,7 +372,6 @@
 
     <form method="post" action="/play" id="playForm">
         <input type="hidden" name="column" id="hiddenColumn" value="">
-        <input type="hidden" name="mode" id="hiddenMode" value="{{.Mode}}">
         <table class="board" aria-label="Plateau de jeu">
             <thead>
                 <tr>
@@ -419,7 +386,7 @@
                 {{range $r := seq 0 (sub $.Rows 1)}}
                 <tr>
                     {{range $c := seq 0 (sub $.Cols 1)}}
-                    <td {{if index $.BoosterCells $r $c}}class="booster-cell" data-booster="{{index $.BoosterCells $r $c}}"{{end}}>
+                    <td>
                         {{ $cell := index $.Board $r $c }}
                         <span class="cell {{if $cell}}{{$cell}}{{end}}"></span>
                     </td>
@@ -474,43 +441,158 @@
     <!-- Fullscreen decorative canvas for textures/animations -->
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
-        // Détecter le mode de jeu et l'équipe du joueur
-        var gameMode = document.body.className.replace('mode-', '');
-        var urlParams = new URLSearchParams(window.location.search);
-        var playerTeam = urlParams.get('team'); // 'R' ou 'Y'
-        
-        console.log('[Mode] Mode de jeu actuel:', gameMode);
-        console.log('[Team] Équipe du joueur:', playerTeam);
-        
-        // Afficher l'équipe du joueur si définie
-        if(playerTeam) {
-            var indicator = document.getElementById('player-team-indicator');
-            var teamText = document.getElementById('player-team-text');
-            if(indicator && teamText) {
-                if(playerTeam === 'R') {
-                    teamText.textContent = '🔴 Tu joues Rouge';
-                    indicator.style.backgroundColor = '#7f1d1d';
-                    indicator.style.color = '#fecaca';
-                } else if(playerTeam === 'Y') {
-                    teamText.textContent = '🟡 Tu joues Jaune';
-                    indicator.style.backgroundColor = '#713f12';
-                    indicator.style.color = '#fef3c7';
-                }
-                indicator.style.display = 'block';
+        // ==================== CODE KONAMI - INITIALISATION PRIORITAIRE ====================
+        // Placer EN PREMIER pour éviter les conflits avec les autres écouteurs d'événements
+        (function() {
+            var konamiSequence = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'a', 'b', 'a', 'b'];
+            var konamiIndex = 0;
+            var konamiActive = false;
+            
+            console.log('🎮 [INIT] Code Konami en cours de chargement...');
+            
+            function launchEasterEgg() {
+                console.log('🚀 [KONAMI] Appel de l\'API pour lancer ESPERSOUL2...');
+                
+                // Afficher une popup de confirmation d'abord
+                var confirmDialog = document.createElement('div');
+                confirmDialog.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;padding:2rem;border-radius:20px;font-size:1.2rem;z-index:999999;text-align:center;box-shadow:0 0 50px rgba(255,0,255,0.8);border:3px solid #00ff00;max-width:500px;';
+                confirmDialog.innerHTML = `
+                    <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">🎮 EASTER EGG DÉCOUVERT! 🎮</h2>
+                    <p style="margin:1rem 0;">Vous avez trouvé le code secret Konami!</p>
+                    <p style="margin:1rem 0;font-size:1rem;"><strong>ESPERSOUL2</strong> - Un jeu d'aventure RPG</p>
+                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
+                        <p style="margin:0.5rem 0;font-size:0.9rem;">⚠️ <strong>Important:</strong></p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">Ce jeu nécessite d'être exécuté localement.</p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">En local: Le jeu se lance automatiquement</p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">En ligne: Vous pouvez télécharger le jeu</p>
+                    </div>
+                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
+                        <button id="btnLaunch" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">🚀 Lancer / Télécharger</button>
+                        <button id="btnCancel" style="background:#dc2626;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">❌ Annuler</button>
+                    </div>
+                `;
+                document.body.appendChild(confirmDialog);
+                
+                // Bouton Annuler
+                document.getElementById('btnCancel').addEventListener('click', function() {
+                    confirmDialog.remove();
+                    console.log('🚫 [KONAMI] Annulé par l\'utilisateur');
+                });
+                
+                // Bouton Lancer/Télécharger
+                document.getElementById('btnLaunch').addEventListener('click', function() {
+                    console.log('✅ [KONAMI] Utilisateur a confirmé');
+                    
+                    // Tentative de lancement (fonctionnera en local)
+                    fetch('/api/launch-easteregg', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        console.log('✅ [KONAMI] Réponse serveur:', data);
+                        
+                        if(data.success) {
+                            // En local: le jeu se lance
+                            console.log('🎮 [KONAMI] ESPERSOUL2 lancé avec succès!');
+                            confirmDialog.innerHTML = `
+                                <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">✅ JEU LANCÉ!</h2>
+                                <p style="margin:1rem 0;">ESPERSOUL2 devrait s'ouvrir dans une nouvelle fenêtre.</p>
+                                <p style="margin:0.5rem 0;font-size:0.9rem;">Regardez votre barre des tâches!</p>
+                                <button onclick="this.parentElement.remove()" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1rem;cursor:pointer;margin-top:1rem;">OK</button>
+                            `;
+                            setTimeout(function() {
+                                if(confirmDialog.parentNode) {
+                                    confirmDialog.remove();
+                                }
+                            }, 5000);
+                        } else {
+                            // Offrir le téléchargement
+                            showDownloadOption(confirmDialog);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('❌ [KONAMI] Erreur serveur:', error);
+                        // En cas d'erreur (serveur en ligne), proposer le téléchargement
+                        showDownloadOption(confirmDialog);
+                    });
+                });
             }
-        }
+            
+            function showDownloadOption(dialog) {
+                console.log('💾 [KONAMI] Proposition de téléchargement');
+                dialog.innerHTML = `
+                    <h2 style="margin:0 0 1rem 0;color:#ff9500;font-size:2rem;">💾 MODE TÉLÉCHARGEMENT</h2>
+                    <p style="margin:1rem 0;">Le jeu ne peut pas être lancé automatiquement depuis un serveur en ligne.</p>
+                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
+                        <p style="margin:0.5rem 0;font-size:0.95rem;"><strong>📋 Instructions:</strong></p>
+                        <ol style="text-align:left;margin:0.5rem 0;padding-left:2rem;font-size:0.9rem;">
+                            <li>Cliquez sur "Télécharger ESPERSOUL2"</li>
+                            <li>Extrayez le dossier ZIP</li>
+                            <li>Double-cliquez sur ESPERSOUL2.exe</li>
+                            <li>Profitez du jeu! 🎮</li>
+                        </ol>
+                    </div>
+                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
+                        <a href="/download/espersoul2" download style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">💾 Télécharger ESPERSOUL2</a>
+                        <button onclick="this.parentElement.parentElement.remove()" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>
+                    </div>
+                    <p style="margin-top:1rem;font-size:0.8rem;color:#888;">Le jeu est totalement gratuit et sans virus 🛡️</p>
+                `;
+            }
+            
+            // Écouteur prioritaire en phase de capture
+            document.addEventListener('keydown', function(e) {
+                var expectedKey = konamiSequence[konamiIndex];
+                var pressedKey = e.key;
+                
+                // Log uniquement si on est dans une séquence active
+                if(konamiIndex > 0 || expectedKey === pressedKey || (expectedKey === 'ArrowUp' && pressedKey === 'ArrowUp')) {
+                    console.log('🎹 [KONAMI]', konamiIndex + '/' + konamiSequence.length, '| Touche:', pressedKey, '| Attendu:', expectedKey);
+                }
+                
+                // Comparaison
+                var isMatch = false;
+                if(expectedKey === 'a' || expectedKey === 'b') {
+                    isMatch = pressedKey.toLowerCase() === expectedKey;
+                } else {
+                    isMatch = pressedKey === expectedKey;
+                }
+                
+                if(isMatch) {
+                    konamiIndex++;
+                    console.log('✅ [KONAMI] Correct! [' + konamiIndex + '/' + konamiSequence.length + ']');
+                    
+                    if(konamiIndex === konamiSequence.length) {
+                        console.log('🎊 [KONAMI] SÉQUENCE COMPLÈTE! ACTIVATION!');
+                        konamiActive = true;
+                        launchEasterEgg();
+                        konamiIndex = 0;
+                    }
+                } else {
+                    if(konamiIndex > 0) {
+                        console.log('❌ [KONAMI] Reset (attendu: ' + expectedKey + ')');
+                    }
+                    konamiIndex = 0;
+                }
+            }, true); // true = capture phase (priorité maximale)
+            
+            console.log('🎮 [INIT] Code Konami activé! Séquence: ↑ ↑ ↓ ↓ A B A B');
+        })();
         
-        // Fonction helper pour vérifier si on est en mode turbo
-        function isTurboMode() {
-            return gameMode === 'turbo' || gameMode === 'solo-turbo' || gameMode === 'multi-turbo';
-        }
-        
+        // Détecter le mode de jeu
+    var gameMode = document.body.className.replace('mode-', '');
+        console.log('[Mode] Mode de jeu actuel:', gameMode);
         // Auto-refresh en mode multijoueur
         (function(){
             if(gameMode !== 'multijoueur') return;
             var lastVersion = null;
             function poll(){
-                fetch('/state?mode=multijoueur', {cache:'no-store'})
+                fetch('/state', {cache:'no-store'})
                 .then(r=>r.json())
                 .then(function(data){
                     if(lastVersion === null){
@@ -530,26 +612,49 @@
             setTimeout(poll, 800);
         })();
 
-        // ===== DÉFINITIONS GLOBALES DES BOOSTERS (doivent être avant WebSocket) =====
+        // WebSocket temps réel (si dispo). Préfère WS et fallback sur polling.
+        (function(){
+            if(gameMode !== 'multijoueur') return;
+            var supported = 'WebSocket' in window || 'MozWebSocket' in window;
+            if(!supported) return; // polling fera le boulot
+            try {
+                var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                var ws = new WebSocket(proto + '://' + location.host + '/ws');
+                var initial = parseInt((document.querySelector('meta[name="game-version"]')||{}).content||'0',10);
+                var last = isNaN(initial) ? null : initial;
+                ws.onmessage = function(evt){
+                    try{
+                        var data = JSON.parse(evt.data);
+                        if(typeof data.version === 'number'){
+                            if(last === null){ last = data.version; }
+                            else if(data.version !== last){
+                                console.log('[WS] Version changée => reload');
+                                location.reload();
+                            }
+                        }
+                    }catch(e){ console.warn('WS parse', e); }
+                };
+                ws.onclose = function(){ console.warn('[WS] Fermé, fallback polling actif'); };
+            } catch(e) {
+                console.warn('[WS] Erreur init', e);
+            }
+        })();
         
-        // Récupérer le code de la partie pour le localStorage
-        var urlParams = new URLSearchParams(window.location.search);
-        var partyCode = urlParams.get('code');
-        var storageKeyR = 'boosters_R_' + partyCode;
-        var storageKeyY = 'boosters_Y_' + partyCode;
-        
-        // Charger les boosters depuis le localStorage si disponibles
+        // Gestion des boosters (mode Turbo uniquement)
         var boostersR = []; // Boosters du joueur 1 (Rouge)
         var boostersY = []; // Boosters du joueur 2 (Jaune)
+        var boostersPanelR = document.getElementById('boostersPanelR');
+        var boostersPanelY = document.getElementById('boostersPanelY');
+        var boostersListR = document.getElementById('boostersListR');
+        var boostersListY = document.getElementById('boostersListY');
+        var noBoostersR = document.getElementById('noBoostersR');
+        var noBoostersY = document.getElementById('noBoostersY');
         
-        try {
-            var savedR = localStorage.getItem(storageKeyR);
-            var savedY = localStorage.getItem(storageKeyY);
-            if(savedR) boostersR = JSON.parse(savedR);
-            if(savedY) boostersY = JSON.parse(savedY);
-            console.log('[Storage] Boosters chargés - R:', boostersR.length, 'Y:', boostersY.length);
-        } catch(e) {
-            console.error('[Storage] Erreur chargement boosters:', e);
+        // Afficher les panneaux des boosters en mode turbo
+        if(gameMode === 'turbo') {
+            if(boostersPanelR) boostersPanelR.style.display = 'block';
+            if(boostersPanelY) boostersPanelY.style.display = 'block';
+            console.log('[Boosters] Panneaux activés en mode Turbo');
         }
         
         // Définition des types de boosters disponibles
@@ -593,86 +698,53 @@
                 type: type,
                 player: player, // 'R' ou 'Y'
                 used: false,
-                name: boosterTypes[type].name,
-                description: boosterTypes[type].description,
-                icon: boosterTypes[type].icon
+                ...boosterTypes[type]
             };
             
             if(player === 'R') {
                 boostersR.push(booster);
-                // Sauvegarder dans localStorage
-                try {
-                    localStorage.setItem(storageKeyR, JSON.stringify(boostersR));
-                } catch(e) {
-                    console.error('[Storage] Erreur sauvegarde boosters R:', e);
-                }
             } else if(player === 'Y') {
                 boostersY.push(booster);
-                // Sauvegarder dans localStorage
-                try {
-                    localStorage.setItem(storageKeyY, JSON.stringify(boostersY));
-                } catch(e) {
-                    console.error('[Storage] Erreur sauvegarde boosters Y:', e);
-                }
             }
             
+            renderBoosters();
             console.log('[Boosters] Nouveau booster ajouté pour joueur', player, ':', booster.name);
-            
-            // Le rendu se fera plus tard dans le code
-            if(typeof renderBoosters === 'function') {
-                renderBoosters();
-            }
-        }
-
-        // Fonction pour afficher les boosters dans les panneaux
-        function renderBoosters() {
-            var boostersRList = document.getElementById('boostersListR');
-            var boostersYList = document.getElementById('boostersListY');
-            var boostersPanelR = document.getElementById('boostersPanelR');
-            var boostersPanelY = document.getElementById('boostersPanelY');
-            var noBoostersR = document.getElementById('noBoostersR');
-            var noBoostersY = document.getElementById('noBoostersY');
-            
-            if(!boostersRList || !boostersYList) return;
-            
-            // Afficher les panneaux si des boosters existent
-            if(boostersPanelR && boostersR.length > 0) {
-                boostersPanelR.style.display = 'block';
-            }
-            if(boostersPanelY && boostersY.length > 0) {
-                boostersPanelY.style.display = 'block';
-            }
-            
-            // Gérer l'affichage du message "Aucun booster"
-            if(noBoostersR) {
-                noBoostersR.style.display = boostersR.length === 0 ? 'block' : 'none';
-            }
-            if(noBoostersY) {
-                noBoostersY.style.display = boostersY.length === 0 ? 'block' : 'none';
-            }
-            
-            // Supprimer les anciennes cartes (sauf le message "Aucun booster")
-            var oldCardsR = boostersRList.querySelectorAll('.booster-card');
-            oldCardsR.forEach(function(card) { card.remove(); });
-            
-            var oldCardsY = boostersYList.querySelectorAll('.booster-card');
-            oldCardsY.forEach(function(card) { card.remove(); });
-            
-            // Afficher les boosters de R
-            boostersR.forEach(function(booster) {
-                var card = createBoosterCard(booster);
-                boostersRList.appendChild(card);
-            });
-            
-            // Afficher les boosters de Y
-            boostersY.forEach(function(booster) {
-                var card = createBoosterCard(booster);
-                boostersYList.appendChild(card);
-            });
-            
-            console.log('Boosters affichés - R:', boostersR.length, 'Y:', boostersY.length);
         }
         
+        // Fonction pour afficher les boosters
+        function renderBoosters() {
+            // Rendu des boosters du joueur 1 (Rouge)
+            if(boostersListR) {
+                if(noBoostersR) {
+                    noBoostersR.style.display = boostersR.length === 0 ? 'block' : 'none';
+                }
+                
+                var cardsR = boostersListR.querySelectorAll('.booster-card');
+                cardsR.forEach(card => card.remove());
+                
+                boostersR.forEach(function(booster) {
+                    var card = createBoosterCard(booster);
+                    boostersListR.appendChild(card);
+                });
+            }
+            
+            // Rendu des boosters du joueur 2 (Jaune)
+            if(boostersListY) {
+                if(noBoostersY) {
+                    noBoostersY.style.display = boostersY.length === 0 ? 'block' : 'none';
+                }
+                
+                var cardsY = boostersListY.querySelectorAll('.booster-card');
+                cardsY.forEach(card => card.remove());
+                
+                boostersY.forEach(function(booster) {
+                    var card = createBoosterCard(booster);
+                    boostersListY.appendChild(card);
+                });
+            }
+        }
+        
+        // Fonction pour créer une carte de booster
         function createBoosterCard(booster) {
             var card = document.createElement('div');
             card.className = 'booster-card' + (booster.used ? ' used' : '');
@@ -692,189 +764,6 @@
             
             return card;
         }
-
-        // WebSocket temps réel pour parties avec code
-        var gameWebSocket = null; // Variable globale pour le WebSocket
-        
-        (function(){
-            // Récupérer le code de la partie depuis l'URL
-            var urlParams = new URLSearchParams(window.location.search);
-            var partyCode = urlParams.get('code');
-            var playerTeam = urlParams.get('team'); // Récupérer l'équipe du joueur
-            
-            if(!partyCode) return; // Pas de code = pas de WebSocket
-            
-            // Afficher les boosters sauvegardés au chargement
-            if(boostersR.length > 0 || boostersY.length > 0) {
-                renderBoosters();
-            }
-            
-            var supported = 'WebSocket' in window || 'MozWebSocket' in window;
-            if(!supported) return;
-            
-            try {
-                var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-                // Inclure l'équipe dans l'URL du WebSocket
-                var wsUrl = proto + '://' + location.host + '/ws/' + partyCode;
-                if(playerTeam) {
-                    wsUrl += '?team=' + playerTeam;
-                }
-                gameWebSocket = new WebSocket(wsUrl);
-                var lastVersion = null; // Suivre la version pour éviter les rechargements inutiles
-                
-                gameWebSocket.onopen = function() {
-                    console.log('[WS] Connecté à la partie', partyCode, 'équipe:', playerTeam);
-                };
-                
-                gameWebSocket.onmessage = function(evt){
-                    try{
-                        var data = JSON.parse(evt.data);
-                        
-                        // Gérer les messages d'erreur du serveur
-                        if(data.type === 'error') {
-                            console.error('[WS] Erreur:', data.message);
-                            alert(data.message);
-                            return;
-                        }
-                        
-                        // Gérer la réponse avec état de jeu
-                        if(data.type === 'state') {
-                            console.log('[WS] Mise à jour état reçue, version:', data.state.version);
-                            
-                            // Vérifier si un booster a été récupéré
-                            if(data.booster && data.player) {
-                                console.log('[Booster] Booster récupéré!', data.booster, 'pour joueur', data.player);
-                                addBooster(data.booster, data.player);
-                                
-                                // Afficher une notification
-                                var boosterName = boosterTypes[data.booster] ? boosterTypes[data.booster].name : data.booster;
-                                var playerName = data.player === 'R' ? '{{.Player1Name}} 🔴' : '{{.Player2Name}} 🟡';
-                                alert('🎉 Booster récupéré!\n\n' + boosterName + '\n\nJoueur: ' + playerName);
-                            }
-                            
-                            // Initialiser la version au premier message
-                            if(lastVersion === null) {
-                                lastVersion = data.state.version;
-                                console.log('[WS] Version initiale:', lastVersion);
-                                return; // Ne pas recharger au premier message
-                            }
-                            
-                            // Recharger seulement si la version a changé
-                            if(data.state.version !== lastVersion) {
-                                console.log('[WS] Version changée de', lastVersion, 'à', data.state.version, '=> reload');
-                                location.reload();
-                            }
-                            return;
-                        }
-                        
-                        // Format ancien (compatibilité)
-                        console.log('[WS] Mise à jour reçue, version:', data.version);
-                        
-                        // Initialiser la version au premier message
-                        if(lastVersion === null) {
-                            lastVersion = data.version;
-                            console.log('[WS] Version initiale:', lastVersion);
-                            return; // Ne pas recharger au premier message
-                        }
-                        
-                        // Recharger seulement si la version a changé
-                        if(data.version !== lastVersion) {
-                            console.log('[WS] Version changée de', lastVersion, 'à', data.version, '=> reload');
-                            location.reload();
-                        }
-                    }catch(e){ 
-                        console.warn('WS parse', e); 
-                    }
-                };
-                
-                gameWebSocket.onclose = function(){ 
-                    console.warn('[WS] Connexion fermée pour la partie', partyCode); 
-                };
-                
-                gameWebSocket.onerror = function(err){
-                    console.error('[WS] Erreur:', err);
-                };
-            } catch(e) {
-                console.warn('[WS] Erreur init', e);
-            }
-        })();
-        
-        // Intercepter le formulaire de jeu pour envoyer via WebSocket au lieu de POST
-        (function(){
-            var playForm = document.getElementById('playForm');
-            if(!playForm) return;
-            
-            playForm.addEventListener('submit', function(e) {
-                e.preventDefault(); // Empêcher le POST classique
-                
-                var columnInput = playForm.querySelector('input[name="column"]');
-                if(!columnInput || !columnInput.value) {
-                    console.warn('[Play] Pas de colonne sélectionnée');
-                    return;
-                }
-                
-                var col = parseInt(columnInput.value);
-                console.log('[Play] Envoi du coup via WebSocket, colonne:', col);
-                
-                // Envoyer le coup via WebSocket
-                if(gameWebSocket && gameWebSocket.readyState === WebSocket.OPEN) {
-                    gameWebSocket.send(JSON.stringify({
-                        type: 'play',
-                        col: col
-                    }));
-                    console.log('[Play] Coup envoyé');
-                } else {
-                    console.error('[Play] WebSocket non connecté');
-                }
-            });
-        })();
-        
-        // Gestion des boosters (mode Turbo uniquement) - Panneaux UI
-        var boostersPanelR = document.getElementById('boostersPanelR');
-        var boostersPanelY = document.getElementById('boostersPanelY');
-        var boostersListR = document.getElementById('boostersListR');
-        var boostersListY = document.getElementById('boostersListY');
-        var noBoostersR = document.getElementById('noBoostersR');
-        var noBoostersY = document.getElementById('noBoostersY');
-        
-        // Afficher les panneaux des boosters en mode turbo
-        if(isTurboMode()) {
-            if(boostersPanelR) boostersPanelR.style.display = 'block';
-            if(boostersPanelY) boostersPanelY.style.display = 'block';
-            console.log('[Boosters] Panneaux activés en mode Turbo');
-        }
-        
-        // Note: boosterTypes et addBooster() sont déjà définis plus haut (avant WebSocket)
-        
-        // Supprimer les anciennes définitions dupliquées - début
-        var boosterTypes_OLD = {
-            'double-shot': {
-                name: '⚡ Double Coup',
-                description: 'Jouez deux fois d\'affilée',
-                icon: '⚡'
-            },
-            'remove-piece': {
-                name: '🗑️ Effaceur',
-                description: 'Retirez un pion adverse du plateau',
-                icon: '🗑️'
-            },
-            'block-column': {
-                name: '🚫 Bloqueur',
-                description: 'Bloquez une colonne pendant un tour',
-                icon: '🚫'
-            },
-            'swap-colors': {
-                name: '🔄 Échange',
-                description: 'Échangez la position de deux pions',
-                icon: '🔄'
-            },
-            'wildcard': {
-                name: '🌟 Joker',
-                description: 'Placez un pion n\'importe où sur le plateau',
-                icon: '🌟'
-            }
-        };
-        // Supprimer les anciennes définitions dupliquées - fin (fonction addBooster déjà définie plus haut)
         
         // Variables globales pour les boosters actifs
         var activeBooster = null;
@@ -895,17 +784,6 @@
             
             console.log('[Boosters] Utilisation du booster par joueur', player, ':', booster.name);
             booster.used = true;
-            
-            // Sauvegarder dans localStorage
-            try {
-                if(player === 'R') {
-                    localStorage.setItem(storageKeyR, JSON.stringify(boostersR));
-                } else {
-                    localStorage.setItem(storageKeyY, JSON.stringify(boostersY));
-                }
-            } catch(e) {
-                console.error('[Storage] Erreur sauvegarde après utilisation:', e);
-            }
             
             // Exécuter la logique selon le type de booster
             switch(booster.type) {
@@ -936,48 +814,27 @@
         // 1. Double Coup - Jouer deux fois d'affilée
         function activateDoubleShot(player) {
             // Envoyer au serveur pour activer le double coup
-            console.log('[Booster] URL complète:', window.location.href);
-            console.log('[Booster] Search params:', window.location.search);
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
             
-            var urlParams = new URLSearchParams(window.location.search);
-            var partyCode = urlParams.get('code');
+            var fields = {
+                'action': 'double-shot',
+                'player': player
+            };
             
-            console.log('[Booster] Activation Double Coup - player:', player, 'code:', partyCode, 'type:', typeof partyCode);
-            
-            // En mode solo (sans code), activer localement
-            if(!partyCode || partyCode === '' || partyCode === 'null') {
-                doublePlayActive = true;
-                alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
-                console.log('[Booster] Double Coup activé en mode solo pour', player);
-                return;
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
             }
             
-            var bodyData = 'action=double-shot&player=' + encodeURIComponent(player) + '&code=' + encodeURIComponent(partyCode);
-            console.log('[Booster] Envoi requête avec body:', bodyData);
-            
-            // Utiliser fetch pour envoyer la requête sans recharger la page
-            fetch('/booster-action', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: bodyData
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('[Booster] Réponse serveur:', data);
-                if(data.success) {
-                    alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
-                    console.log('[Booster] Double Coup activé pour', player);
-                } else {
-                    console.error('[Booster] Erreur serveur:', data.message);
-                    alert('Erreur: ' + (data.message || 'Action impossible'));
-                }
-            })
-            .catch(error => {
-                console.error('[Booster] Erreur:', error);
-                alert('Erreur lors de l\'activation du booster');
-            });
+            document.body.appendChild(form);
+            alert('⚡ Double Coup activé!\n\nVous allez jouer deux fois d\'affilée.');
+            console.log('[Booster] Double Coup activé pour', player);
+            form.submit();
         }
         
         // 2. Effaceur - Retirer un pion adverse
@@ -1028,12 +885,6 @@
         }
         
         // ===== FONCTIONS UTILITAIRES =====
-        
-        // Fonction pour obtenir le code de partie
-        function getPartyCode() {
-            var urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('code') || '';
-        }
         
         function highlightOpponentPieces(color) {
             var cells = document.querySelectorAll('td[data-color="' + color + '"]');
@@ -1090,9 +941,9 @@
         // ===== GESTION DES CLICS SUR LE PLATEAU =====
         
         // Initialiser les événements de clic sur le plateau en mode turbo
-        if(isTurboMode()) {
+        if(gameMode === 'turbo') {
             // Nombre de colonnes depuis le serveur
-            var boardCols = parseInt('{{.Cols}}') || 7;
+            var boardCols = parseInt(document.querySelector('.board thead tr').children.length) || 7;
             
             // Ajouter data-color aux cellules existantes
             var allCells = document.querySelectorAll('td');
@@ -1162,33 +1013,29 @@
         function handleRemovePiece(td, row, col) {
             console.log('[Booster] Retrait du pion en', row, col);
             
-            var partyCode = getPartyCode();
-            var bodyData = 'action=remove-piece&player=' + encodeURIComponent(activeBooster.player) + 
-                          '&row=' + row + '&col=' + col + '&code=' + encodeURIComponent(partyCode);
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
             
-            fetch('/booster-action', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: bodyData
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('[Booster] Réponse serveur:', data);
-                if(data.success) {
-                    console.log('[Booster] Pion retiré avec succès');
-                    location.reload();
-                } else {
-                    alert('Erreur: ' + (data.message || 'Action impossible'));
-                }
-            })
-            .catch(error => {
-                console.error('[Booster] Erreur:', error);
-                alert('Erreur lors de l\'activation du booster');
-            });
+            var fields = {
+                'action': 'remove-piece',
+                'player': activeBooster.player,
+                'row': row,
+                'col': col
+            };
             
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
             cancelActiveBooster();
+            form.submit();
         }
         
         // Gérer l'échange de deux pions
@@ -1204,34 +1051,31 @@
                 
                 swapFirstPiece.td.style.border = '';
                 
-                var partyCode = getPartyCode();
-                var bodyData = 'action=swap-colors&player=' + encodeURIComponent(activeBooster.player) + 
-                              '&row1=' + swapFirstPiece.row + '&col1=' + swapFirstPiece.col +
-                              '&row2=' + row + '&col2=' + col + '&code=' + encodeURIComponent(partyCode);
+                // Envoyer au serveur
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/booster-action';
                 
-                fetch('/booster-action', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: bodyData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('[Booster] Réponse serveur:', data);
-                    if(data.success) {
-                        console.log('[Booster] Pions échangés avec succès');
-                        location.reload();
-                    } else {
-                        alert('Erreur: ' + (data.message || 'Action impossible'));
-                    }
-                })
-                .catch(error => {
-                    console.error('[Booster] Erreur:', error);
-                    alert('Erreur lors de l\'activation du booster');
-                });
+                var fields = {
+                    'action': 'swap-colors',
+                    'player': activeBooster.player,
+                    'row1': swapFirstPiece.row,
+                    'col1': swapFirstPiece.col,
+                    'row2': row,
+                    'col2': col
+                };
                 
+                for(var key in fields) {
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = fields[key];
+                    form.appendChild(input);
+                }
+                
+                document.body.appendChild(form);
                 cancelActiveBooster();
+                form.submit();
             }
         }
         
@@ -1239,33 +1083,29 @@
         function handleWildcard(td, row, col) {
             console.log('[Booster] Placement d\'un joker en', row, col);
             
-            var partyCode = getPartyCode();
-            var bodyData = 'action=wildcard&player=' + encodeURIComponent(activeBooster.player) + 
-                          '&row=' + row + '&col=' + col + '&code=' + encodeURIComponent(partyCode);
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
             
-            fetch('/booster-action', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: bodyData
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('[Booster] Réponse serveur:', data);
-                if(data.success) {
-                    console.log('[Booster] Joker placé avec succès');
-                    location.reload();
-                } else {
-                    alert('Erreur: ' + (data.message || 'Action impossible'));
-                }
-            })
-            .catch(error => {
-                console.error('[Booster] Erreur:', error);
-                alert('Erreur lors de l\'activation du booster');
-            });
+            var fields = {
+                'action': 'wildcard',
+                'player': activeBooster.player,
+                'row': row,
+                'col': col
+            };
             
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
             cancelActiveBooster();
+            form.submit();
         }
         
         // Gérer le blocage d'une colonne
@@ -1273,33 +1113,28 @@
         function handleBlockColumn(btn, col) {
             console.log('[Booster] Blocage de la colonne', col);
             
-            var partyCode = getPartyCode();
-            var bodyData = 'action=block-column&player=' + encodeURIComponent(activeBooster.player) + 
-                          '&col=' + col + '&code=' + encodeURIComponent(partyCode);
+            // Envoyer au serveur
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/booster-action';
             
-            fetch('/booster-action', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: bodyData
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('[Booster] Réponse serveur:', data);
-                if(data.success) {
-                    console.log('[Booster] Colonne bloquée avec succès');
-                    location.reload();
-                } else {
-                    alert('Erreur: ' + (data.message || 'Action impossible'));
-                }
-            })
-            .catch(error => {
-                console.error('[Booster] Erreur:', error);
-                alert('Erreur lors de l\'activation du booster');
-            });
+            var fields = {
+                'action': 'block-column',
+                'player': activeBooster.player,
+                'col': col
+            };
             
+            for(var key in fields) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = fields[key];
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
             cancelActiveBooster();
+            form.submit();
         }
         
         // Fonction pour détecter le joueur actif
@@ -1321,7 +1156,7 @@
         
         // Fonction pour mettre à jour l'état actif/inactif des panneaux de boosters
         function updateBoosterPanelsState() {
-            if(!isTurboMode()) return;
+            if(gameMode !== 'turbo') return;
             
             var currentPlayer = getCurrentPlayer();
             
@@ -1345,7 +1180,7 @@
         }
         
         // Mettre à jour l'état des panneaux au chargement et après chaque coup
-        if(isTurboMode()) {
+        if(gameMode === 'turbo') {
             updateBoosterPanelsState();
             
             // Observer les changements dans le status pour mettre à jour les panneaux
@@ -1358,23 +1193,14 @@
             }
         }
         
-        // Détecter si un booster a été récupéré (via query params)
-        if(isTurboMode()) {
-            var urlParams = new URLSearchParams(window.location.search);
-            var boosterType = urlParams.get('booster');
-            var player = urlParams.get('player');
-            
-            if(boosterType && player) {
-                console.log('[Booster] Booster récupéré!', boosterType, 'pour joueur', player);
-                addBooster(boosterType, player);
-                
-                // Nettoyer l'URL
-                window.history.replaceState({}, document.title, window.location.pathname);
-                
-                // Afficher une notification
-                var boosterName = boosterTypes[boosterType] ? boosterTypes[boosterType].name : boosterType;
-                alert('🎉 Booster récupéré!\n\n' + boosterName + '\n\nJoueur: ' + (player === 'R' ? '{{.Player1Name}} 🔴' : '{{.Player2Name}} 🟡'));
-            }
+        // POUR TESTER : Ajouter quelques boosters au démarrage en mode turbo
+        if(gameMode === 'turbo') {
+            setTimeout(function() {
+                addBooster('double-shot', 'R');
+                addBooster('remove-piece', 'R');
+                addBooster('block-column', 'Y');
+                addBooster('wildcard', 'Y');
+            }, 1000);
         }
         
         // Variable pour compter le nombre de clics en jeu (persistante)
@@ -1520,7 +1346,7 @@
                 
                 isSubmitting = true;
             });
-        })();
+        })();   
     </script>
     <script src="/static/app.js" defer></script>
     
