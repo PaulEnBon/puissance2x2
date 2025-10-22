@@ -453,38 +453,96 @@
             function launchEasterEgg() {
                 console.log('🚀 [KONAMI] Appel de l\'API pour lancer ESPERSOUL2...');
                 
-                fetch('/api/launch-easteregg', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                })
-                .then(function(response) {
-                    return response.json();
-                })
-                .then(function(data) {
-                    console.log('✅ [KONAMI] Réponse serveur:', data);
-                    if(data.success) {
-                        console.log('🎮 [KONAMI] ESPERSOUL2 lancé avec succès!');
-                        
-                        // Message de succès
-                        var successMsg = document.createElement('div');
-                        successMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#00ff00,#00cc00);color:white;padding:3rem;border-radius:20px;font-size:2.5rem;font-weight:bold;z-index:999999;text-align:center;box-shadow:0 0 50px rgba(0,255,0,0.8);';
-                        successMsg.innerHTML = '🎮 ESPERSOUL2<br>LANCÉ! 🎮<br><br><small style="font-size:1rem;">Regardez votre terminal</small>';
-                        document.body.appendChild(successMsg);
-                        
-                        setTimeout(function() {
-                            if(successMsg.parentNode) {
-                                successMsg.style.transition = 'opacity 1s';
-                                successMsg.style.opacity = '0';
-                                setTimeout(function() { successMsg.remove(); }, 1000);
-                            }
-                        }, 3000);
-                    }
-                })
-                .catch(function(error) {
-                    console.error('❌ [KONAMI] Erreur lors du lancement:', error);
+                // Afficher une popup de confirmation d'abord
+                var confirmDialog = document.createElement('div');
+                confirmDialog.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#1a1a2e,#16213e);color:white;padding:2rem;border-radius:20px;font-size:1.2rem;z-index:999999;text-align:center;box-shadow:0 0 50px rgba(255,0,255,0.8);border:3px solid #00ff00;max-width:500px;';
+                confirmDialog.innerHTML = `
+                    <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">🎮 EASTER EGG DÉCOUVERT! 🎮</h2>
+                    <p style="margin:1rem 0;">Vous avez trouvé le code secret Konami!</p>
+                    <p style="margin:1rem 0;font-size:1rem;"><strong>ESPERSOUL2</strong> - Un jeu d'aventure RPG</p>
+                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
+                        <p style="margin:0.5rem 0;font-size:0.9rem;">⚠️ <strong>Important:</strong></p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">Ce jeu nécessite d'être exécuté localement.</p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">En local: Le jeu se lance automatiquement</p>
+                        <p style="margin:0.5rem 0;font-size:0.85rem;">En ligne: Vous pouvez télécharger le jeu</p>
+                    </div>
+                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
+                        <button id="btnLaunch" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">🚀 Lancer / Télécharger</button>
+                        <button id="btnCancel" style="background:#dc2626;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">❌ Annuler</button>
+                    </div>
+                `;
+                document.body.appendChild(confirmDialog);
+                
+                // Bouton Annuler
+                document.getElementById('btnCancel').addEventListener('click', function() {
+                    confirmDialog.remove();
+                    console.log('🚫 [KONAMI] Annulé par l\'utilisateur');
                 });
+                
+                // Bouton Lancer/Télécharger
+                document.getElementById('btnLaunch').addEventListener('click', function() {
+                    console.log('✅ [KONAMI] Utilisateur a confirmé');
+                    
+                    // Tentative de lancement (fonctionnera en local)
+                    fetch('/api/launch-easteregg', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(function(response) {
+                        return response.json();
+                    })
+                    .then(function(data) {
+                        console.log('✅ [KONAMI] Réponse serveur:', data);
+                        
+                        if(data.success) {
+                            // En local: le jeu se lance
+                            console.log('🎮 [KONAMI] ESPERSOUL2 lancé avec succès!');
+                            confirmDialog.innerHTML = `
+                                <h2 style="margin:0 0 1rem 0;color:#00ff00;font-size:2rem;">✅ JEU LANCÉ!</h2>
+                                <p style="margin:1rem 0;">ESPERSOUL2 devrait s'ouvrir dans une nouvelle fenêtre.</p>
+                                <p style="margin:0.5rem 0;font-size:0.9rem;">Regardez votre barre des tâches!</p>
+                                <button onclick="this.parentElement.remove()" style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1rem;cursor:pointer;margin-top:1rem;">OK</button>
+                            `;
+                            setTimeout(function() {
+                                if(confirmDialog.parentNode) {
+                                    confirmDialog.remove();
+                                }
+                            }, 5000);
+                        } else {
+                            // Offrir le téléchargement
+                            showDownloadOption(confirmDialog);
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('❌ [KONAMI] Erreur serveur:', error);
+                        // En cas d'erreur (serveur en ligne), proposer le téléchargement
+                        showDownloadOption(confirmDialog);
+                    });
+                });
+            }
+            
+            function showDownloadOption(dialog) {
+                console.log('💾 [KONAMI] Proposition de téléchargement');
+                dialog.innerHTML = `
+                    <h2 style="margin:0 0 1rem 0;color:#ff9500;font-size:2rem;">💾 MODE TÉLÉCHARGEMENT</h2>
+                    <p style="margin:1rem 0;">Le jeu ne peut pas être lancé automatiquement depuis un serveur en ligne.</p>
+                    <div style="background:rgba(255,255,255,0.1);padding:1rem;border-radius:10px;margin:1rem 0;">
+                        <p style="margin:0.5rem 0;font-size:0.95rem;"><strong>📋 Instructions:</strong></p>
+                        <ol style="text-align:left;margin:0.5rem 0;padding-left:2rem;font-size:0.9rem;">
+                            <li>Cliquez sur "Télécharger ESPERSOUL2"</li>
+                            <li>Extrayez le dossier ZIP</li>
+                            <li>Double-cliquez sur ESPERSOUL2.exe</li>
+                            <li>Profitez du jeu! 🎮</li>
+                        </ol>
+                    </div>
+                    <div style="display:flex;gap:1rem;justify-content:center;margin-top:1.5rem;">
+                        <a href="/download/espersoul2" download style="background:#00ff00;color:#000;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;text-decoration:none;display:inline-block;">💾 Télécharger ESPERSOUL2</a>
+                        <button onclick="this.parentElement.parentElement.remove()" style="background:#6366f1;color:white;border:none;padding:1rem 2rem;border-radius:10px;font-size:1.1rem;font-weight:bold;cursor:pointer;">✖️ Fermer</button>
+                    </div>
+                    <p style="margin-top:1rem;font-size:0.8rem;color:#888;">Le jeu est totalement gratuit et sans virus 🛡️</p>
+                `;
             }
             
             // Écouteur prioritaire en phase de capture

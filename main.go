@@ -696,6 +696,36 @@ func launchEasterEggHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// downloadEasterEggHandler permet de télécharger le jeu ESPERSOUL2
+func downloadEasterEggHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println("💾 Demande de téléchargement ESPERSOUL2...")
+
+	// Chemin vers le dossier du jeu
+	gamePath := "epp4/ESPERSOUL2"
+
+	// Vérifier si le dossier existe
+	if _, err := os.Stat(gamePath); os.IsNotExist(err) {
+		log.Printf("❌ Dossier ESPERSOUL2 non trouvé: %s", gamePath)
+		http.Error(w, "Jeu non disponible", http.StatusNotFound)
+		return
+	}
+
+	// Vérifier si l'exécutable existe
+	exePath := gamePath + "/ESPERSOUL2.exe"
+	if _, err := os.Stat(exePath); err == nil {
+		// Envoyer l'exécutable
+		log.Printf("✅ Envoi de l'exécutable: %s", exePath)
+		w.Header().Set("Content-Disposition", "attachment; filename=ESPERSOUL2.exe")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		http.ServeFile(w, r, exePath)
+		return
+	}
+
+	// Si pas d'exe, informer l'utilisateur
+	log.Println("⚠️ Aucun exécutable trouvé")
+	http.Error(w, "Exécutable non disponible. Le jeu doit être compilé localement.", http.StatusNotFound)
+}
+
 // ---------------- MAIN ----------------
 
 func main() {
@@ -709,6 +739,7 @@ func main() {
 	http.HandleFunc("/ws/", wsPartyHandler)
 	http.HandleFunc("/booster-action", boosterActionHandler)
 	http.HandleFunc("/api/launch-easteregg", launchEasterEggHandler)
+	http.HandleFunc("/download/espersoul2", downloadEasterEggHandler)
 	http.HandleFunc("/debug-konami", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "templates/debug_konami.html")
 	})
