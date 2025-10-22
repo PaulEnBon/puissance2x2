@@ -10,6 +10,7 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"power4/game"
 	"strings"
 	"sync"
@@ -639,6 +640,62 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// launchEasterEggHandler lance le jeu ESPERSOUL2 comme Easter Egg
+func launchEasterEggHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	log.Println("🎮 EASTER EGG ACTIVÉ! Lancement de ESPERSOUL2...")
+
+	// Définir le chemin vers le jeu (chemin absolu)
+	gamePath := "epp4\\ESPERSOUL2"
+
+	// Vérifier si l'exécutable existe
+	exePath := gamePath + "\\ESPERSOUL2.exe"
+	log.Printf("🔍 Vérification de l'exécutable: %s", exePath)
+
+	if _, err := os.Stat(exePath); err == nil {
+		// Lancer l'exécutable directement dans une nouvelle fenêtre
+		log.Println("✅ Exécutable trouvé, lancement...")
+		go func() {
+			cmd := exec.Command("cmd", "/C", "start", "", exePath)
+			if err := cmd.Start(); err != nil {
+				log.Printf("❌ Erreur lancement .exe: %v", err)
+			} else {
+				log.Println("✅ ESPERSOUL2.exe lancé dans une nouvelle fenêtre!")
+			}
+		}()
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "🎮 ESPERSOUL2.exe lancé!",
+			"method":  "executable",
+		})
+		return
+	}
+
+	log.Println("⚠️ Exécutable non trouvé, lancement via go run...")
+
+	// Sinon, lancer via go run dans une nouvelle fenêtre CMD
+	go func() {
+		// Windows: ouvrir une nouvelle fenêtre CMD et lancer go run
+		// /K garde la fenêtre ouverte après l'exécution
+		cmd := exec.Command("cmd", "/C", "start", "cmd", "/K", "cd", gamePath, "&&", "go", "run", "main.go")
+
+		log.Printf("🚀 Commande: %v", cmd.Args)
+
+		if err := cmd.Start(); err != nil {
+			log.Printf("❌ Erreur lancement Easter Egg: %v", err)
+		} else {
+			log.Println("✅ ESPERSOUL2 lancé dans une nouvelle fenêtre CMD!")
+		}
+	}()
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "🎮 ESPERSOUL2 en cours de lancement...",
+		"method":  "go run",
+	})
+}
+
 // ---------------- MAIN ----------------
 
 func main() {
@@ -651,6 +708,10 @@ func main() {
 	http.HandleFunc("/api/party/join", joinPartyHandler)
 	http.HandleFunc("/ws/", wsPartyHandler)
 	http.HandleFunc("/booster-action", boosterActionHandler)
+	http.HandleFunc("/api/launch-easteregg", launchEasterEggHandler)
+	http.HandleFunc("/debug-konami", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "templates/debug_konami.html")
+	})
 
 	// Fichiers statiques
 	fs := http.FileServer(http.Dir("templates"))
