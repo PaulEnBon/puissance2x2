@@ -10,7 +10,10 @@ import (
 	mrand "math/rand"
 	"net/http"
 	"os"
+<<<<<<< HEAD
 	_ "os/exec" // Gardé pour usage futur
+=======
+>>>>>>> 74104140c5ab87bed33754a1b0ce65a7ae112c8c
 	"power4/game"
 	"strings"
 	"sync"
@@ -732,6 +735,7 @@ func gameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+<<<<<<< HEAD
 // launchEasterEggHandler lance le jeu ESPERSOUL2 comme Easter Egg
 // NOTE: Le lancement automatique est désactivé car il fait crasher le serveur
 // L'utilisateur doit télécharger le jeu via /download/espersoul2
@@ -795,6 +799,8 @@ func downloadEasterEggHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Exécutable non disponible. Le jeu doit être compilé localement.", http.StatusNotFound)
 }
 
+=======
+>>>>>>> 74104140c5ab87bed33754a1b0ce65a7ae112c8c
 // ---------------- MAIN ----------------
 
 func main() {
@@ -807,11 +813,6 @@ func main() {
 	http.HandleFunc("/api/party/join", joinPartyHandler)
 	http.HandleFunc("/ws/", wsPartyHandler)
 	http.HandleFunc("/booster-action", boosterActionHandler)
-	http.HandleFunc("/api/launch-easteregg", launchEasterEggHandler)
-	http.HandleFunc("/download/espersoul2", downloadEasterEggHandler)
-	http.HandleFunc("/debug-konami", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "templates/debug_konami.html")
-	})
 
 	// Fichiers statiques
 	fs := http.FileServer(http.Dir("templates"))
