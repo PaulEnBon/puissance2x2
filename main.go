@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"power4/game"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,8 +43,7 @@ var (
 	muMultiExponentiel sync.Mutex
 	muMultiClassique   sync.Mutex
 	muMultiTurbo       sync.Mutex
-
-	playerNames = []string{"Joueur 1", "Joueur 2"}
+	playerNames        = []string{"Joueur 1", "Joueur 2"}
 )
 
 // Templates
@@ -109,9 +109,38 @@ func createPartyHandler(w http.ResponseWriter, r *http.Request) {
 		mode = "solo-classique" // Mode par défaut
 	}
 
+	// Taille de grille facultative (utile pour mode exponentiel)
+	rowsParam := strings.TrimSpace(r.URL.Query().Get("rows"))
+	colsParam := strings.TrimSpace(r.URL.Query().Get("cols"))
+	rows := 6
+	cols := 7
+	if rowsParam != "" {
+		if v, err := strconv.Atoi(rowsParam); err == nil {
+			rows = v
+		}
+	}
+	if colsParam != "" {
+		if v, err := strconv.Atoi(colsParam); err == nil {
+			cols = v
+		}
+	}
+	// Bornes de sécurité (le tableau est 15x15 max dans GameState)
+	if rows < 4 {
+		rows = 4
+	}
+	if cols < 4 {
+		cols = 4
+	}
+	if rows > 15 {
+		rows = 15
+	}
+	if cols > 15 {
+		cols = 15
+	}
+
 	code := generateCode()
 	newState := game.GameState{
-		Rows: 6, Cols: 7, WinLength: 4,
+		Rows: rows, Cols: cols, WinLength: 4,
 		Next: "R", Mode: mode,
 	}
 

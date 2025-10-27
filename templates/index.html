@@ -358,7 +358,7 @@
         }
     </style>
 </head>
-<body class="mode-{{.Mode}}">
+<body class="mode-{{.Mode}}" data-rows="{{.Rows}}" data-cols="{{.Cols}}">
     <div class="game-container">
         <h1>Puissance 4</h1>
         <!-- Affichage de l'équipe du joueur -->
@@ -389,10 +389,7 @@
             <div id="compteDisplay" style="background:#16a34a;color:white;padding:0.5rem 0.75rem;border-radius:6px;font-weight:bold;">
                 Clics: <span id="compteValue">0</span>
             </div>
-            <form method="post" action="/next-level" style="display:inline">
-                <input type="hidden" name="mode" value="{{.Mode}}">
-                <button id="nextLevel" type="submit">Nouvelle partie</button>
-            </form>
+            <button id="nextLevel" type="button">Nouvelle partie</button>
             <form method="post" action="/reset" style="display:inline">
                 <input type="hidden" name="mode" value="{{.Mode}}">
                 <button id="reset" type="submit" style="background:#dc2626;border:none;padding:0.5rem 0.75rem;border-radius:6px;cursor:pointer;color:white;" title="Réinitialiser la grille et la difficulté">🔄 Reset Complet</button>
@@ -475,7 +472,9 @@
     <canvas id="bgCanvas" aria-hidden="true" style="position:fixed;inset:0;z-index:-1;pointer-events:none;" ></canvas>
     <script>
         // Détecter le mode de jeu et l'équipe du joueur
-        var gameMode = document.body.className.replace('mode-', '');
+    var gameMode = document.body.className.replace('mode-', '');
+    var boardRows = parseInt(document.body.dataset.rows || '0', 10);
+    var boardCols = parseInt(document.body.dataset.cols || '0', 10);
         var urlParams = new URLSearchParams(window.location.search);
         var playerTeam = urlParams.get('team'); // 'R' ou 'Y'
         
@@ -828,7 +827,40 @@
                 }
             });
         })();
-        
+
+        // Nouvelle partie: crée une partie selon le mode courant et redirige
+        (function(){
+            var btn = document.getElementById('nextLevel');
+            if(!btn) return;
+            btn.addEventListener('click', async function(){
+                btn.disabled = true;
+                try {
+                    let url = '/api/party/create?mode=' + encodeURIComponent(gameMode);
+                    // En mode exponentiel, agrandir la grille pour la manche suivante
+                    if (gameMode.indexOf('exponentiel') !== -1) {
+                        let nextRows = Math.min(15, boardRows + 1);
+                        let nextCols = Math.min(15, boardCols + 1);
+                        url += '&rows=' + nextRows + '&cols=' + nextCols;
+                    }
+                    const res = await fetch(url, { cache: 'no-store' });
+                    if(!res.ok) throw new Error('HTTP ' + res.status);
+                    const data = await res.json();
+                    if(data && data.code){
+                        var target = '/game?code=' + encodeURIComponent(data.code);
+                        if(playerTeam) target += '&team=' + encodeURIComponent(playerTeam);
+                        window.location.href = target;
+                    } else {
+                        alert('Erreur: création de partie impossible');
+                        btn.disabled = false;
+                    }
+                } catch(e){
+                    console.error('[NextLevel] Erreur création partie:', e);
+                    alert('Erreur serveur lors de la création de la partie');
+                    btn.disabled = false;
+                }
+            });
+        })();
+
         // Gestion des boosters (mode Turbo uniquement) - Panneaux UI
         var boostersPanelR = document.getElementById('boostersPanelR');
         var boostersPanelY = document.getElementById('boostersPanelY');
@@ -1091,8 +1123,8 @@
         
         // Initialiser les événements de clic sur le plateau en mode turbo
         if(isTurboMode()) {
-            // Nombre de colonnes depuis le serveur
-            var boardCols = parseInt('{{.Cols}}') || 7;
+            // Nombre de colonnes (déjà fourni via data attribute)
+            var boardColsLocal = boardCols || 7;
             
             // Ajouter data-color aux cellules existantes
             var allCells = document.querySelectorAll('td');
@@ -1106,8 +1138,8 @@
                     }
                     
                     // Ajouter position row/col
-                    var row = Math.floor(index / boardCols);
-                    var col = index % boardCols;
+                    var row = Math.floor(index / boardColsLocal);
+                    var col = index % boardColsLocal;
                     td.setAttribute('data-row', row);
                     td.setAttribute('data-col', col);
                 }
